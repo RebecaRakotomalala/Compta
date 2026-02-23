@@ -1,0 +1,230 @@
+﻿@{
+    ViewData["Title"] = "ComptaPro - Votre solution de gestion comptable";
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"]</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="~/css/home.css" />
+</head>
+<body>
+    <!-- Navbar -->
+    @await Html.PartialAsync("_Navbar")
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h1 class="hero-title">Simplifiez votre<br>comptabilité</h1>
+                <p class="hero-subtitle">La solution tout-en-un pour une gestion financière efficace et intuitive</p>
+                <p class="hero-description">
+                    ComptaPro transforme la gestion de vos finances avec des outils puissants 
+                    et une interface moderne. Importez, analysez et gérez vos données comptables 
+                    en toute simplicité.
+                </p>
+            </div>
+        </div>
+        
+        <!-- Floating Elements -->
+        <div class="floating-elements">
+            <div class="floating-element">
+                <i class="bi bi-graph-up-arrow"></i>
+            </div>
+            <div class="floating-element">
+                <i class="bi bi-cash-coin"></i>
+            </div>
+            <div class="floating-element">
+                <i class="bi bi-shield-check"></i>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features">
+        <div class="container">
+            <h2 class="section-title">Des <span>fonctionnalités</span> puissantes</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="bi bi-cloud-arrow-up-fill"></i>
+                    </div>
+                    <h3 class="feature-title">Import CSV Intelligent</h3>
+                    <p class="feature-description">
+                        Importez vos fichiers CSV bancaires en quelques clics. Notre système 
+                        reconnaît automatiquement les formats et organise vos transactions.
+                    </p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="bi bi-journal-bookmark-fill"></i>
+                    </div>
+                    <h3 class="feature-title">Grand Livre Détaillé</h3>
+                    <p class="feature-description">
+                        Consultez l'ensemble de vos écritures comptables dans un grand livre 
+                        structuré et facilement exportable pour vos rapports.
+                    </p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="bi bi-bar-chart-fill"></i>
+                    </div>
+                    <h3 class="feature-title">Analyses Avancées</h3>
+                    <p class="feature-description">
+                        Visualisez vos données financières avec des graphiques interactifs 
+                        et des tableaux de bord personnalisables.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats">
+        <div class="container">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-number">99.9%</div>
+                    <div class="stat-label">Fiabilité des données</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">50+</div>
+                    <div class="stat-label">Formats de fichiers supportés</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">24/7</div>
+                    <div class="stat-label">Disponibilité</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">500+</div>
+                    <div class="stat-label">Entreprises satisfaites</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta">
+        <div class="container">
+            <div class="cta-content">
+                <h2 class="cta-title">Prêt à révolutionner votre comptabilité ?</h2>
+                <p class="cta-description">
+                    Rejoignez des centaines de professionnels qui nous font confiance 
+                    pour la gestion de leur comptabilité.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div>
+                    <div class="footer-brand">
+                        <i class="bi bi-calculator"></i>
+                        <span>ComptaPro</span>
+                    </div>
+                    <p>
+                        Votre partenaire de confiance pour une gestion comptable 
+                        moderne et efficace.
+                    </p>
+                </div>
+                
+                <div>
+                    <h3>Navigation</h3>
+                    <div class="footer-links">
+                        <a href="#"><i class="bi bi-chevron-right"></i> Accueil</a>
+                        <a href="#"><i class="bi bi-chevron-right"></i> Import CSV</a>
+                        <a href="#"><i class="bi bi-chevron-right"></i> Grand Livre</a>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3>Contact</h3>
+                    <div class="footer-links">
+                        <a href="#"><i class="bi bi-envelope"></i> contact@comptapro.fr</a>
+                        <a href="#"><i class="bi bi-telephone"></i> +33 1 23 45 67 89</a>
+                        <a href="#"><i class="bi bi-geo-alt"></i> Paris, France</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>&copy; 2024 ComptaPro. Tous droits réservés.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Animation au scroll
+        document.addEventListener('DOMContentLoaded', function() {
+            const observerOptions = {
+                threshold: 0.1,
+                rootMargin: '0px 0px -50px 0px'
+            };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.opacity = '1';
+                        entry.target.style.transform = 'translateY(0)';
+                    }
+                });
+            }, observerOptions);
+
+            // Observer les éléments à animer
+            document.querySelectorAll('.feature-card, .stat-item').forEach(el => {
+                el.style.opacity = '0';
+                el.style.transform = 'translateY(30px)';
+                el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+                observer.observe(el);
+            });
+
+            // Animation des statistiques
+            const statNumbers = document.querySelectorAll('.stat-number');
+            statNumbers.forEach(stat => {
+                const finalValue = stat.textContent;
+                stat.textContent = '0';
+                
+                const observer = new IntersectionObserver((entries) => {
+                    if (entries[0].isIntersecting) {
+                        let current = 0;
+                        const increment = parseInt(finalValue) / 50;
+                        const timer = setInterval(() => {
+                            current += increment;
+                            if (current >= parseInt(finalValue)) {
+                                stat.textContent = finalValue;
+                                clearInterval(timer);
+                            } else {
+                                stat.textContent = Math.floor(current);
+                            }
+                        }, 30);
+                        observer.disconnect();
+                    }
+                }, { threshold: 0.5 });
+                
+                observer.observe(stat);
+            });
+        });
+
+        // Effet de parallaxe
+        window.addEventListener('scroll', function() {
+            const scrolled = window.pageYOffset;
+            const parallaxElements = document.querySelectorAll('.floating-element');
+            
+            parallaxElements.forEach((el, index) => {
+                const speed = 0.5 + (index * 0.1);
+                const yPos = -(scrolled * speed * 0.5);
+                el.style.transform = `translateY(${yPos}px)`;
+            });
+        });
+    </script>
+</body>
+</html>

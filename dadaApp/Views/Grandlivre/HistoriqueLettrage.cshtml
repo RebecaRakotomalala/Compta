@@ -1,0 +1,206 @@
+@model List<LettrageManuel>
+
+@{
+    ViewData["Title"] = "Historique des Lettrages";
+    Layout = null;
+}
+
+@await Html.PartialAsync("_Navbar")
+<link rel="stylesheet" href="~/css/historique.css" />
+
+<div class="historique-container">
+    <div class="historique-header">
+        <div class="header-content">
+            <h1>
+                <i class="bi bi-clock-history"></i>
+                Historique des Lettrages Manuels
+            </h1>
+            <p class="subtitle">Consultez tous les lettrages effectués</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-danger" onclick="supprimerToutLettrage()">
+                <i class="bi bi-trash-fill"></i> Supprimer Tout
+            </button>
+            <a href="@Url.Action("Listes")" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Retour
+            </a>
+        </div>
+    </div>
+
+    @if (Model != null && Model.Count > 0)
+    {
+        <div class="historique-stats">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="bi bi-collection"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value">@Model.Count</div>
+                    <div class="stat-label">Lettrages Total</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="bi bi-calendar-event"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value">@Model.Max(l => l.DateCreation).ToString("dd/MM/yyyy")</div>
+                    <div class="stat-label">Plus Récent</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="bi bi-cash-coin"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value">@Model.Sum(l => l.TotalDebit).ToString("N2")</div>
+                    <div class="stat-label">Total Débits</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table-historique">
+                <thead>
+                    <tr>
+                        <th>Numéro Lettrage</th>
+                        <th>Client</th>
+                        <th>Date de Création</th>
+                        <th>Total Débit</th>
+                        <th>Total Crédit</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var lettrage in Model.OrderByDescending(l => l.DateCreation))
+                    {
+                        <tr class="row-item">
+                            <td class="numero-cell">
+                                <span class="badge-numero">@lettrage.NumeroLettrage</span>
+                            </td>
+                            <td class="client-cell">
+                                @if (!string.IsNullOrWhiteSpace(lettrage.NomClient))
+                                {
+                                    <div class="client-info">
+                                        <strong>@lettrage.NomClient</strong>
+                                        <small class="client-code">@lettrage.CodeClient</small>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                            <td class="date-cell">
+                                <span class="date-badge">@lettrage.DateCreation.ToString("dd/MM/yyyy HH:mm")</span>
+                            </td>
+                            <td class="montant-cell debit">
+                                <span class="montant">@lettrage.TotalDebit.ToString("N2")</span>
+                            </td>
+                            <td class="montant-cell credit">
+                                <span class="montant">@lettrage.TotalCredit.ToString("N2")</span>
+                            </td>
+                            <td class="actions-cell">
+                                <button class="btn-action btn-view" onclick="afficherDetails('@lettrage.NumeroLettrage')" title="Voir détails">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                                <button class="btn-action btn-delete" onclick="supprimerLettrage('@lettrage.NumeroLettrage')" title="Supprimer">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <div class="empty-state">
+            <div class="empty-icon">
+                <i class="bi bi-inbox"></i>
+            </div>
+            <h3>Aucun lettrage trouvé</h3>
+            <p>Il n'y a pas encore d'historique de lettrages manuels.</p>
+            <a href="@Url.Action("Listes")" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Créer un premier lettrage
+            </a>
+        </div>
+    }
+</div>
+
+<!-- Modal Détails -->
+<div id="detailsModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Détails du Lettrage</h2>
+            <button class="modal-close" onclick="fermerModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBody">
+            <!-- Les détails seront chargés ici -->
+        </div>
+    </div>
+</div>
+
+<script>
+    function afficherDetails(numeroLettrage) {
+        // Vous pouvez faire un appel AJAX ici pour charger les détails
+        alert(`Détails du lettrage: ${numeroLettrage}`);
+        // TODO: Charger les écritures associées via AJAX
+    }
+
+    function supprimerLettrage(numeroLettrage) {
+        if (!confirm(`Êtes-vous sûr de vouloir supprimer le lettrage ${numeroLettrage}?`)) {
+            return;
+        }
+
+        fetch('@Url.Action("SupprimerLettrage")', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(numeroLettrage)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Lettrage supprimé avec succès');
+                location.reload();
+            } else {
+                alert('Erreur: ' + data.message);
+            }
+        })
+        .catch(error => console.error('Erreur:', error));
+    }
+
+    function supprimerToutLettrage() {
+        if (!confirm("Êtes-vous sûr de vouloir supprimer TOUS les lettrages ? Cette action est irréversible.")) {
+            return;
+        }
+
+        fetch('@Url.Action("SupprimerTousLesLettrages")', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Tous les lettrages ont été supprimés');
+                location.reload();
+            } else {
+                alert('Erreur: ' + data.message);
+            }
+        })
+        .catch(error => console.error('Erreur:', error));
+    }
+
+    function fermerModal() {
+        document.getElementById('detailsModal').style.display = 'none';
+    }
+
+    window.onclick = function(event) {
+        const modal = document.getElementById('detailsModal');
+        if (event.target == modal) {
+            modal.style.display = 'none';
+        }
+    }
+</script>

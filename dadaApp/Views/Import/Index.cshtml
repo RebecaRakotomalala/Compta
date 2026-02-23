@@ -1,0 +1,557 @@
+@model dadaApp.Models.ImportIndexViewModel
+@{
+    ViewData["Title"] = "Import CSV";
+    Layout = null;
+}
+
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<link rel="stylesheet" href="~/css/import.css" />
+
+<!-- Include Navbar -->
+@await Html.PartialAsync("_Navbar")
+
+<div class="container">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="header-content">
+            <div class="header-icon">
+                <i class="bi bi-cloud-arrow-up-fill"></i>
+            </div>
+            <div class="header-text">
+                <h1 class="page-title">Import de données CSV</h1>
+                <p class="page-subtitle">
+                    Importez votre Grand Livre comptable ou supprimez les données existantes
+                </p>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button class="data-control-btn danger" id="deleteAllBtn" data-toggle="modal" data-target="#deleteModal">
+                <i class="bi bi-trash3"></i>
+                <span>Supprimer toutes les données</span>
+            </button>
+        </div>
+        <form id="deleteForm" method="post" asp-action="SupprimerTout" asp-controller="Import">
+            @Html.AntiForgeryToken()
+        </form>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-grid">
+        <!-- Upload Section -->
+        <div class="upload-section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <i class="bi bi-upload"></i>
+                    Importer des fichiers
+                </h2>
+                <div class="section-subtitle">
+                    Formats supportés : CSV (vous pouvez en importer plusieurs à la fois)
+                </div>
+            </div>
+
+            <form asp-action="Upload"
+                  method="post"
+                  enctype="multipart/form-data"
+                  id="uploadForm"
+                  class="upload-form">
+
+                <div class="upload-card">
+                    <div class="upload-header">
+                        <div class="upload-progress" id="uploadProgress" style="width: 0%"></div>
+                    </div>
+
+                    <div class="upload-body">
+                        <div class="upload-area" id="uploadArea">
+                            <div class="upload-icon-wrapper">
+                                <div class="upload-icon">
+                                    <i class="bi bi-cloud-arrow-up"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="upload-text">
+                                <h3>Glissez votre fichier ici</h3>
+                                <p>ou cliquez pour sélectionner</p>
+                            </div>
+
+                            <input type="file"
+                                   class="file-input"
+                                   id="fileInput"
+                                   name="files"
+                                   accept=".csv"
+                                   multiple
+                                   required>
+                        </div>
+
+                        <!-- Files Preview -->
+                        <div class="files-preview" id="filesPreview" style="display: none;">
+                            <div class="preview-header">
+                                <h4>Fichiers sélectionnés (<span id="fileCount">0</span>)</h4>
+                                <button type="button" class="preview-close" id="removeAllFiles">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+                            <div class="preview-list" id="filesList"></div>
+                        </div>  
+                    </div>
+
+                    <div class="upload-footer">
+                        <button type="submit"
+                                class="upload-btn"
+                                id="uploadBtn"
+                                disabled>
+                            <span class="btn-icon">
+                                <i class="bi bi-upload"></i>
+                            </span>
+                            <span class="btn-text" id="uploadText">Importer les fichiers</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Instructions Section -->
+        <div class="instructions-section">
+            <div class="instructions-card">
+                <h3 class="instructions-title">
+                    <i class="bi bi-info-circle"></i>
+                    Comment importer vos données
+                </h3>
+                
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h4>Préparez votre fichier</h4>
+                            <p>Exportez vos données au format CSV depuis votre logiciel de comptabilité</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h4>Vérifiez le format</h4>
+                            <p>Assurez-vous que les colonnes sont correctement nommées et formatées</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h4>Importez</h4>
+                            <p>Glissez-déposez votre fichier ou cliquez pour le sélectionner</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h4>Vérifiez les données</h4>
+                            <p>Consultez le Grand Livre pour vérifier l'importation</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Messages -->
+    <div class="status-container">
+        @if (!string.IsNullOrEmpty(Model.MessageSuccess))
+        {
+            <div class="status-message success" id="successMessage">
+                <div class="status-icon">
+                    <i class="bi bi-check-circle-fill"></i>
+                </div>
+                <div class="status-content">
+                    <div class="status-title">Import réussi</div>
+                    <div>@Model.MessageSuccess</div>
+                </div>
+                <div class="status-actions">
+                    <a href="@Url.Action("Listes", "Grandlivre")" class="status-action">
+                        <i class="bi bi-eye"></i>
+                        Voir les données
+                    </a>
+                </div>
+                <button type="button" class="close-status" onclick="this.parentElement.remove()">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(Model.MessageError))
+        {
+            <div class="status-message error" id="errorMessage">
+                <div class="status-icon">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                </div>
+                <div class="status-content">
+                    <div class="status-title">Erreur d'import</div>
+                    <div>@Model.MessageError</div>
+                </div>
+                <button type="button" class="close-status" onclick="this.parentElement.remove()">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal-overlay" id="deleteModal" style="display: none;">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-icon danger">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+            </div>
+            <h3 class="modal-title">Supprimer toutes les données</h3>
+            <button type="button" class="modal-close" onclick="closeDeleteModal()">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        
+        <div class="modal-body">
+            <p class="modal-warning">
+                <i class="bi bi-exclamation-circle"></i>
+                Cette action est irréversible
+            </p>
+            
+            <div class="modal-content">
+                <p>Êtes-vous sûr de vouloir supprimer <strong>toutes les données</strong> ?</p>
+                <ul class="modal-list">
+                    <li>Toutes les entrées comptables seront effacées</li>
+                    <li>Les fichiers importés seront supprimés</li>
+                    <li>Cette action ne peut pas être annulée</li>
+                </ul>
+                
+                <div class="confirmation-input">
+                    <label for="confirmText">
+                        Tapez <strong>SUPPRIMER</strong> pour confirmer :
+                    </label>
+                    <input type="text" 
+                           id="confirmText" 
+                           placeholder="SUPPRIMER"
+                           class="confirmation-field"
+                           autocomplete="off">
+                </div>
+            </div>
+        </div>
+        
+        <div class="modal-footer">
+            <button type="button" class="modal-btn secondary" onclick="closeDeleteModal()">
+                Annuler
+            </button>
+            <button type="button" 
+                    class="modal-btn danger" 
+                    id="confirmDeleteBtn"
+                    onclick="confirmDelete()"
+                    disabled>
+                <i class="bi bi-trash3"></i>
+                Supprimer toutes les données
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // DOM Elements
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const filePreview = document.getElementById('filePreview');
+        const fileName = document.getElementById('fileName');
+        const fileSizeInfo = document.getElementById('fileSizeInfo');
+        const fileIcon = document.getElementById('fileIcon');
+        const removeFile = document.getElementById('removeFile');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const uploadText = document.getElementById('uploadText');
+        const uploadForm = document.getElementById('uploadForm');
+        const uploadProgress = document.getElementById('uploadProgress');
+        const deleteAllBtn = document.getElementById('deleteAllBtn');
+        const deleteModal = document.getElementById('deleteModal');
+        const confirmText = document.getElementById('confirmText');
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+
+
+        // Drag and drop functionality
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, function() {
+                uploadArea.classList.add('dragover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, function() {
+                uploadArea.classList.remove('dragover');
+            }, false);
+        });
+
+        uploadArea.addEventListener('drop', function(e) {
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                handleFilesSelection(files);
+            }
+        }, false);
+
+        // File selection
+        fileInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                handleFilesSelection(this.files);
+            }
+        });
+
+        function handleFilesSelection(files) {
+            const validFiles = [];
+            
+            // Valider tous les fichiers
+            for (let i = 0; i < files.length; i++) {
+                if (validateFile(files[i])) {
+                    validFiles.push(files[i]);
+                }
+            }
+
+            if (validFiles.length === 0) {
+                return;
+            }
+
+            // Afficher la liste des fichiers
+            displayFilesList(validFiles);
+            
+            // Activer le bouton d'upload
+            uploadBtn.disabled = false;
+            uploadBtn.classList.remove('disabled');
+        }
+
+        function displayFilesList(files) {
+            const filesList = document.getElementById('filesList');
+            filesList.innerHTML = '';
+            
+            files.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <div class="file-item-icon">
+                        <i class="bi bi-filetype-csv"></i>
+                    </div>
+                    <div class="file-item-details">
+                        <div class="file-item-name">${file.name}</div>
+                        <div class="file-item-info">
+                            <span class="file-item-size">${formatFileSize(file.size)}</span>
+                        </div>
+                    </div>
+                    <button type="button" class="file-item-remove" onclick="removeFileFromSelection(${index})" title="Supprimer ce fichier">
+                        <i class="bi bi-x-circle"></i>
+                    </button>
+                `;
+                filesList.appendChild(fileItem);
+            });
+            
+            // Mettre à jour le compteur
+            document.getElementById('fileCount').textContent = files.length;
+            
+            // Afficher la prévisualisation
+            const filesPreview = document.getElementById('filesPreview');
+            filesPreview.style.display = 'block';
+            setTimeout(() => filesPreview.classList.add('show'), 10);
+        }
+
+        function removeFileFromSelection(index) {
+            const files = Array.from(fileInput.files);
+            files.splice(index, 1);
+            
+            // Créer une nouvelle FileList
+            const dataTransfer = new DataTransfer();
+            files.forEach(file => {
+                dataTransfer.items.add(file);
+            });
+            fileInput.files = dataTransfer.files;
+            
+            if (files.length === 0) {
+                const filesPreview = document.getElementById('filesPreview');
+                filesPreview.classList.remove('show');
+                setTimeout(() => filesPreview.style.display = 'none', 300);
+                uploadBtn.disabled = true;
+                uploadBtn.classList.add('disabled');
+            } else {
+                displayFilesList(files);
+            }
+        }
+
+        function validateFile(file) {
+            // Check file type
+            const validExtensions = ['.csv'];
+            const fileExt = '.' + file.name.split('.').pop().toLowerCase();
+            
+            if (!validExtensions.includes(fileExt)) {
+                showToast('Format non supporté. Utilisez CSV', 'error');
+                return false;
+            }
+
+            // Check file size (50MB max)
+            const maxSize = 50 * 1024 * 1024;
+            if (file.size > maxSize) {
+                showToast('Fichier trop volumineux. Maximum : 50MB', 'error');
+                return false;
+            }
+
+            if (file.size === 0) {
+                showToast('Le fichier est vide', 'error');
+                return false;
+            }
+
+            return true;
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function getFileType(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const types = {
+                'csv': 'Fichier CSV',
+                'xlsx': 'Excel',
+                'xls': 'Excel',
+                'ods': 'OpenDocument'
+            };
+            return types[ext] || 'Document';
+        }
+
+        // Remove all files
+        const removeAllFilesBtn = document.getElementById('removeAllFiles');
+        if (removeAllFilesBtn) {
+            removeAllFilesBtn.addEventListener('click', function() {
+                fileInput.value = '';
+                const filesPreview = document.getElementById('filesPreview');
+                filesPreview.classList.remove('show');
+                setTimeout(() => filesPreview.style.display = 'none', 300);
+                uploadBtn.disabled = true;
+                uploadBtn.classList.add('disabled');
+            });
+        }
+
+        // Form submission
+        uploadForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                showToast('Veuillez sélectionner au moins un fichier', 'error');
+                return;
+            }
+
+            // Simulate upload progress
+            const fileCount = fileInput.files.length;
+            uploadText.textContent = `Import de ${fileCount} fichier(s) en cours...`;
+            uploadBtn.classList.add('loading');
+            uploadBtn.disabled = true;
+            
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += 10;
+                uploadProgress.style.width = progress + '%';
+                
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    // Submit form after animation
+                    setTimeout(() => uploadForm.submit(), 500);
+                }
+            }, 100);
+        });
+
+        // Delete modal functionality
+        deleteAllBtn.addEventListener('click', function() {
+            deleteModal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        });
+
+        confirmText.addEventListener('input', function() {
+            confirmDeleteBtn.disabled = this.value.toUpperCase() !== 'SUPPRIMER';
+            confirmDeleteBtn.classList.toggle('disabled', this.value.toUpperCase() !== 'SUPPRIMER');
+        });
+
+        // Close modal when clicking outside
+        deleteModal.addEventListener('click', function(e) {
+            if (e.target === deleteModal) {
+                closeDeleteModal();
+            }
+        });
+
+        // Escape key to close modal
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && deleteModal.style.display === 'flex') {
+                closeDeleteModal();
+            }
+        });
+
+        // Auto-remove success message
+        const successMessage = document.getElementById('successMessage');
+        if (successMessage) {
+            setTimeout(() => {
+                if (successMessage.parentElement) {
+                    successMessage.remove();
+                }
+            }, 10000);
+        }
+    });
+
+    function closeDeleteModal() {
+        const modal = document.getElementById('deleteModal');
+        const confirmText = document.getElementById('confirmText');
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+        confirmText.value = '';
+        confirmDeleteBtn.disabled = true;
+        confirmDeleteBtn.classList.add('disabled');
+    }
+
+    function confirmDelete() {
+        const confirmText = document.getElementById('confirmText');
+
+        if (confirmText.value.toUpperCase() !== 'SUPPRIMER') {
+            showToast('Veuillez taper SUPPRIMER pour confirmer', 'error');
+            return;
+        }
+
+        document.getElementById('deleteForm').submit();
+    }
+
+
+    function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `
+            <div class="toast-icon">
+                <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+            </div>
+            <div class="toast-message">${message}</div>
+            <button class="toast-close" onclick="this.parentElement.remove()">
+                <i class="bi bi-x"></i>
+            </button>
+        `;
+        
+        document.body.appendChild(toast);
+        
+        // Show with animation
+        setTimeout(() => toast.classList.add('show'), 10);
+        
+        // Auto-remove
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, 5000);
+    }
+</script>

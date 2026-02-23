@@ -1,0 +1,169 @@
+@{
+    var currentAction = ViewContext.RouteData.Values["Action"]?.ToString();
+    var currentController = ViewContext.RouteData.Values["Controller"]?.ToString();
+}
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<link rel="stylesheet" href="~/css/navbar.css" />
+
+<nav class="navbar">
+    <div class="navbar-container">
+        <!-- Logo avec animation -->
+        <a href="/" class="navbar-brand">
+            <div class="logo-container">
+                <div class="logo-icon">
+                    <i class="bi bi-calculator"></i>
+                </div>
+                <div class="logo-text">
+                    <span class="logo-primary">Compta</span>
+                    <span class="logo-accent">Pro</span>
+                </div>
+            </div>
+        </a>
+
+        <!-- Navigation principale -->
+        <div class="nav-main">
+            <ul class="nav-menu">
+                <li>
+                    <a asp-controller="Home" asp-action="Index" 
+                       class="nav-item @(currentAction == "Index" && currentController == "Home" ? "active" : "")">
+                        <div class="nav-icon">
+                            <i class="bi bi-house-door"></i>
+                        </div>
+                        <span class="nav-label">Accueil</span>
+                        <div class="nav-indicator"></div>
+                    </a>
+                </li>
+                <li>
+                    <a asp-controller="Import" asp-action="Index" 
+                       class="nav-item @(currentAction == "Index" && currentController == "Import" ? "active" : "")">
+                        <div class="nav-icon">
+                            <i class="bi bi-cloud-arrow-up-fill"></i>
+                        </div>
+                        <span class="nav-label">Import CSV</span>
+                        <div class="nav-indicator"></div>
+                    </a>
+                </li>
+                <li>
+                    <a asp-controller="Grandlivre" asp-action="Listes" 
+                       class="nav-item @(currentAction == "Listes" ? "active" : "")">
+                        <div class="nav-icon">
+                            <i class="bi bi-journal-bookmark-fill"></i>
+                        </div>
+                        <span class="nav-label">Grand Livre</span>
+                        <div class="nav-indicator"></div>
+                    </a>
+                </li>
+                <!-- Bouton Historique des lettrages -->
+                <li>
+                    <a asp-controller="Grandlivre" asp-action="HistoriqueLettrage" 
+                    class="nav-item @(currentAction == "HistoriqueLettrage" ? "active" : "")">
+                    <div class="nav-icon">
+                            <i class="bi bi-clock-history"></i> 
+                        </div>
+                        <span class="nav-label">Histo LM</span>
+                        <div class="nav-indicator"></div>
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <!-- User menu (optionnel) -->
+        <div class="nav-user">
+            <div class="user-avatar">
+                <i class="bi bi-person-circle"></i>
+            </div>
+        </div>
+
+        <!-- Menu mobile -->
+        <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">
+            <span class="toggle-line"></span>
+            <span class="toggle-line"></span>
+            <span class="toggle-line"></span>
+        </button>
+    </div>
+
+    <!-- Menu mobile overlay -->
+    <div class="mobile-overlay" id="mobileOverlay"></div>
+    <div class="mobile-menu" id="mobileMenu">
+        <div class="mobile-header">
+            <div class="mobile-brand">
+                <i class="bi bi-calculator"></i>
+                <span>ComptaPro</span>
+            </div>
+            <button class="mobile-close" id="mobileClose">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="mobile-nav">
+            <a asp-controller="Home" asp-action="Index" 
+               class="mobile-item @(currentAction == "Index" && currentController == "Home" ? "active" : "")">
+                <i class="bi bi-house-door"></i>
+                <span>Accueil</span>
+            </a>
+            <a asp-controller="Import" asp-action="Index" 
+               class="mobile-item @(currentAction == "Index" && currentController == "Import" ? "active" : "")">
+                <i class="bi bi-cloud-arrow-up-fill"></i>
+                <span>Import CSV</span>
+            </a>
+            <a asp-controller="Grandlivre" asp-action="Listes" 
+               class="mobile-item @(currentAction == "Listes" ? "active" : "")">
+                <i class="bi bi-journal-bookmark-fill"></i>
+                <span>Grand Livre</span>
+            </a>
+            <!-- Bouton Historique dans le menu mobile -->
+            <a asp-controller="Grandlivre" asp-action="HistoriqueLettrage" 
+               class="mobile-item @(currentAction == "HistoriqueLettrage" ? "active" : "")">
+               <div class="nav-icon">
+                    <i class="bi bi-clock-history"></i>
+                </div>
+                <span>Histo LM</span>
+            </a>
+        </div>
+    </div>
+</nav>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const navToggle = document.getElementById('navToggle');
+        const mobileOverlay = document.getElementById('mobileOverlay');
+        const mobileMenu = document.getElementById('mobileMenu');
+        const mobileClose = document.getElementById('mobileClose');
+        const body = document.body;
+
+        // Toggle menu mobile
+        function toggleMobileMenu() {
+            mobileOverlay.classList.toggle('active');
+            mobileMenu.classList.toggle('active');
+            body.style.overflow = mobileMenu.classList.contains('active') ? 'hidden' : '';
+            navToggle.classList.toggle('active');
+        }
+
+        navToggle.addEventListener('click', toggleMobileMenu);
+        mobileOverlay.addEventListener('click', toggleMobileMenu);
+        mobileClose.addEventListener('click', toggleMobileMenu);
+
+        // Fermer le menu en cliquant sur un lien mobile
+        document.querySelectorAll('.mobile-item').forEach(item => {
+            item.addEventListener('click', toggleMobileMenu);
+        });
+
+        // Animation au scroll
+        let lastScroll = 0;
+        window.addEventListener('scroll', () => {
+            const currentScroll = window.pageYOffset;
+            const navbar = document.querySelector('.navbar');
+            
+            if (currentScroll <= 0) {
+                navbar.style.transform = 'translateY(0)';
+                navbar.style.boxShadow = '0 2px 20px rgba(106, 13, 173, 0.1)';
+            } else if (currentScroll > lastScroll) {
+                navbar.style.transform = 'translateY(-100%)';
+            } else {
+                navbar.style.transform = 'translateY(0)';
+                navbar.style.boxShadow = '0 8px 30px rgba(106, 13, 173, 0.15)';
+            }
+            lastScroll = currentScroll;
+        });
+    });
+</script>
