@@ -106,6 +106,10 @@ using (var scope = app.Services.CreateScope())
         Console.WriteLine("Warning: could not apply migrations: " + ex.Message);
         Console.WriteLine("This often happens when the database host is IPv6-only and"
                           + " the current network has no IPv6 connectivity.");
+        if (!app.Environment.IsDevelopment())
+        {
+            throw;
+        }
     }
 
     try

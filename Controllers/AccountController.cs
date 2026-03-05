@@ -6,10 +6,12 @@ using System.Linq;
 public class AccountController : Controller
 {
     private readonly AppDbContext _context;
+    private readonly ILogger<AccountController> _logger;
 
-    public AccountController(AppDbContext context)
+    public AccountController(AppDbContext context, ILogger<AccountController> logger)
     {
         _context = context;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -26,9 +28,19 @@ public class AccountController : Controller
             return View(model);
         }
 
-        // ✅ Vérifier si l'utilisateur existe dans la base
-        var user = _context.Users
-            .FirstOrDefault(u => u.Username == model.Username && u.Password == model.Password);
+        User? user = null;
+        try
+        {
+            // Vérifier si l'utilisateur existe dans la base
+            user = _context.Users
+                .FirstOrDefault(u => u.Username == model.Username && u.Password == model.Password);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erreur lors de la verification du login.");
+            ModelState.AddModelError("", "Base de donnees indisponible ou non initialisee.");
+            return View(model);
+        }
 
         if (user != null)
         {
@@ -36,7 +48,7 @@ public class AccountController : Controller
             return RedirectToAction("Index", "Home");
         }
 
-        ModelState.AddModelError("", "Email ou mot de passe incorrect");
+        ModelState.AddModelError("", "Identifiant ou mot de passe incorrect");
         return View(model);
     }
 }
