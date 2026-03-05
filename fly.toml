@@ -5,7 +5,8 @@ app = "compta-app"
   dockerfile = "Dockerfile"
 
 [env]
-  DATABASE_URL = "postgresql://root:W9Ef3i4w32hj5xFzxfqfPvZeXKINTXLj@dpg-d6kic49aae7s73ae0l20-a/compta_duko"
+  # Do not store production secrets in git-tracked files.
+  # Set DATABASE_URL using `fly secrets set` if you deploy on Fly again.
 
 [[services]]
   internal_port = 8080

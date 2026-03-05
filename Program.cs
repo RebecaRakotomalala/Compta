@@ -73,9 +73,14 @@ if (connString != null && (connString.StartsWith("postgres://", StringComparison
     connString = connBuilder.ToString();
 }
 
-// log the final connection string for diagnostic purposes (omit secrets in
-// any shared logs!)
-Console.WriteLine("Using connection string: " + connString);
+if (string.IsNullOrWhiteSpace(connString))
+{
+    throw new InvalidOperationException(
+        "No PostgreSQL connection string found. Configure DATABASE_URL in Railway variables."
+    );
+}
+
+Console.WriteLine("Database connection string detected.");
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connString));
 
