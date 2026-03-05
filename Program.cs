@@ -108,7 +108,7 @@ using (var scope = app.Services.CreateScope())
 // value if we add it to the URLs collection; default to 8080 for local
 // testing.
 var portValue = Environment.GetEnvironmentVariable("PORT") ?? "8080";
-app.Urls.Add($"http://*:{portValue}");
+app.Urls.Add("http://0.0.0.0:8080");
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
