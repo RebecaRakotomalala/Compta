@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using dadaApp.Data;
+using dadaApp.Models;
 using dadaApp.Services;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
@@ -105,6 +106,38 @@ using (var scope = app.Services.CreateScope())
         Console.WriteLine("Warning: could not apply migrations: " + ex.Message);
         Console.WriteLine("This often happens when the database host is IPv6-only and"
                           + " the current network has no IPv6 connectivity.");
+    }
+
+    try
+    {
+        var defaultUsername = Environment.GetEnvironmentVariable("DEFAULT_LOGIN_USERNAME") ?? "Dada";
+        var defaultPassword = Environment.GetEnvironmentVariable("DEFAULT_LOGIN_PASSWORD") ?? "reriro";
+
+        var existingUser = db.Users.FirstOrDefault(u => u.Username == defaultUsername);
+        if (existingUser == null)
+        {
+            db.Users.Add(new User
+            {
+                Username = defaultUsername,
+                Password = defaultPassword
+            });
+            db.SaveChanges();
+            Console.WriteLine($"Default login user created: {defaultUsername}");
+        }
+        else
+        {
+            // Keep this account usable even if password changed manually in DB.
+            if (existingUser.Password != defaultPassword)
+            {
+                existingUser.Password = defaultPassword;
+                db.SaveChanges();
+                Console.WriteLine($"Default login user password reset: {defaultUsername}");
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("Warning: could not create default login user: " + ex.Message);
     }
 }
 
