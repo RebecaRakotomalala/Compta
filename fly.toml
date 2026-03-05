@@ -4,8 +4,11 @@ app = "compta-app"
   # use the Dockerfile already in the repository
   dockerfile = "Dockerfile"
 
+[env]
+  DATABASE_URL = "postgresql://root:W9Ef3i4w32hj5xFzxfqfPvZeXKINTXLj@dpg-d6kic49aae7s73ae0l20-a/compta_duko"
+
 [[services]]
-  internal_port = 80
+  internal_port = 8080
   protocol = "tcp"
 
   [services.concurrency]
