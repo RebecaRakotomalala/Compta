@@ -40,8 +40,8 @@ if (connString != null && (connString.StartsWith("postgres://", StringComparison
 {
     var uri = new Uri(connString);
     var userInfo = uri.UserInfo.Split(':', 2);
-    var user = userInfo.Length > 0 ? userInfo[0] : string.Empty;
-    var password = userInfo.Length > 1 ? userInfo[1] : string.Empty;
+    var user = userInfo.Length > 0 ? Uri.UnescapeDataString(userInfo[0]) : string.Empty;
+    var password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : string.Empty;
     var host = uri.Host;
     var port = uri.Port;
     var database = uri.AbsolutePath.TrimStart('/');
@@ -49,7 +49,8 @@ if (connString != null && (connString.StartsWith("postgres://", StringComparison
     // start with basic connection parameters
     var connBuilder = new System.Text.StringBuilder();
     connBuilder.Append($"Host={host};");
-    connBuilder.Append($"Port={port};");
+    // Some providers omit the port in DATABASE_URL; Npgsql rejects -1.
+    connBuilder.Append($"Port={(port > 0 ? port : 5432)};");
     connBuilder.Append($"Database={database};");
     connBuilder.Append($"Username={user};");
     connBuilder.Append($"Password={password};");
@@ -77,7 +78,7 @@ if (connString != null && (connString.StartsWith("postgres://", StringComparison
 if (string.IsNullOrWhiteSpace(connString))
 {
     throw new InvalidOperationException(
-        "No PostgreSQL connection string found. Configure DATABASE_URL in Railway variables."
+        "No PostgreSQL connection string found. Configure DATABASE_URL in Render variables."
     );
 }
 

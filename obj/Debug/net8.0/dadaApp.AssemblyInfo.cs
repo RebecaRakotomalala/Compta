@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("dadaApp")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+fe875cca4c7c70550b0b149dd3108ad1b25fd49e")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f729ea52f6d144957d7ce8b882121e59bf3900e4")]
 [assembly: System.Reflection.AssemblyProductAttribute("dadaApp")]
 [assembly: System.Reflection.AssemblyTitleAttribute("dadaApp")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
