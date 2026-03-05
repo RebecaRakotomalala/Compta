@@ -30,11 +30,10 @@ if (string.IsNullOrWhiteSpace(connString) || connString.Contains("localhost"))
     }
 }
 
-// if the connection string comes from a URI (as Supabase supplies), we need
+// if the connection string comes from a URI (as Supabase or Neon supply), we need
 // to translate it into the key=value format that Npgsql (and EF Core) expect.
-// NpgsqlConnectionStringBuilder doesn't currently handle the URI form, which
-// would otherwise cause a parsing exception like the one seen when running
-// locally with DATABASE_URL set to a postgres://... string.
+// NpgsqlConnectionStringBuilder doesn't currently handle the URI form.
+// This also parses any query parameters (e.g., sslmode, channel_binding from Neon).
 if (connString != null && (connString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
     || connString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase)))
 {
@@ -45,9 +44,33 @@ if (connString != null && (connString.StartsWith("postgres://", StringComparison
     var host = uri.Host;
     var port = uri.Port;
     var database = uri.AbsolutePath.TrimStart('/');
-    // enforce SSL per Supabase requirements
-    connString =
-        $"Host={host};Port={port};Database={database};Username={user};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+    
+    // start with basic connection parameters
+    var connBuilder = new System.Text.StringBuilder();
+    connBuilder.Append($"Host={host};");
+    connBuilder.Append($"Port={port};");
+    connBuilder.Append($"Database={database};");
+    connBuilder.Append($"Username={user};");
+    connBuilder.Append($"Password={password};");
+    
+    // parse any query parameters (e.g., sslmode=require, channel_binding=require from Neon)
+    if (!string.IsNullOrEmpty(uri.Query))
+    {
+        var queryParams = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        foreach (string key in queryParams.Keys)
+        {
+            var value = queryParams[key];
+            // convert snake_case to PascalCase for Npgsql (e.g. sslmode -> SSL Mode)
+            var npgsqlKey = System.Text.RegularExpressions.Regex.Replace(
+                key,
+                @"(?:^|_)(.)",
+                m => m.Groups[1].Value.ToUpper()
+            );
+            connBuilder.Append($"{npgsqlKey}={value};");
+        }
+    }
+    
+    connString = connBuilder.ToString();
 }
 
 // log the final connection string for diagnostic purposes (omit secrets in
