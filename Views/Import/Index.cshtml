@@ -1,6 +1,6 @@
 @model dadaApp.Models.ImportIndexViewModel
 @{
-    ViewData["Title"] = "Import CSV";
+    ViewData["Title"] = "Import de données";
     Layout = null;
 }
 
@@ -19,9 +19,9 @@
                 <i class="bi bi-cloud-arrow-up-fill"></i>
             </div>
             <div class="header-text">
-                <h1 class="page-title">Import de données CSV</h1>
+                <h1 class="page-title">Import de données comptables</h1>
                 <p class="page-subtitle">
-                    Importez votre Grand Livre comptable ou supprimez les données existantes
+                    Importez votre Grand Livre auxiliaire (TXT) ou supprimez les données existantes
                 </p>
             </div>
         </div>
@@ -46,7 +46,7 @@
                     Importer des fichiers
                 </h2>
                 <div class="section-subtitle">
-                    Formats supportés : CSV (vous pouvez en importer plusieurs à la fois)
+                    Formats supportés : TXT (Grand Livre auxiliaire), CSV (vous pouvez en importer plusieurs à la fois)
                 </div>
             </div>
 
@@ -78,7 +78,7 @@
                                    class="file-input"
                                    id="fileInput"
                                    name="files"
-                                   accept=".csv"
+                                   accept=""
                                    multiple
                                    required>
                         </div>
@@ -123,14 +123,14 @@
                         <div class="step-number">1</div>
                         <div class="step-content">
                             <h4>Préparez votre fichier</h4>
-                            <p>Exportez vos données au format CSV depuis votre logiciel de comptabilité</p>
+                            <p>Exportez votre Grand Livre auxiliaire au format TXT depuis votre logiciel de comptabilité (format ET468)</p>
                         </div>
                     </div>
                     <div class="step">
                         <div class="step-number">2</div>
                         <div class="step-content">
                             <h4>Vérifiez le format</h4>
-                            <p>Assurez-vous que les colonnes sont correctement nommées et formatées</p>
+                            <p>Le fichier TXT doit contenir les lignes "Compte :" et les écritures avec séparateurs "!"</p>
                         </div>
                     </div>
                     <div class="step">
@@ -337,9 +337,10 @@
             files.forEach((file, index) => {
                 const fileItem = document.createElement('div');
                 fileItem.className = 'file-item';
+                const fileIcon = file.name.toLowerCase().endsWith('.txt') ? 'bi-file-text' : 'bi-filetype-csv';
                 fileItem.innerHTML = `
                     <div class="file-item-icon">
-                        <i class="bi bi-filetype-csv"></i>
+                        <i class="bi ${fileIcon}"></i>
                     </div>
                     <div class="file-item-details">
                         <div class="file-item-name">${file.name}</div>
@@ -386,14 +387,7 @@
         }
 
         function validateFile(file) {
-            // Check file type
-            const validExtensions = ['.csv'];
-            const fileExt = '.' + file.name.split('.').pop().toLowerCase();
-            
-            if (!validExtensions.includes(fileExt)) {
-                showToast('Format non supporté. Utilisez CSV', 'error');
-                return false;
-            }
+            // Pas de validation d'extension (le fichier peut ne pas en avoir)
 
             // Check file size (50MB max)
             const maxSize = 50 * 1024 * 1024;
@@ -421,6 +415,7 @@
         function getFileType(filename) {
             const ext = filename.split('.').pop().toLowerCase();
             const types = {
+                'txt': 'Grand Livre TXT',
                 'csv': 'Fichier CSV',
                 'xlsx': 'Excel',
                 'xls': 'Excel',

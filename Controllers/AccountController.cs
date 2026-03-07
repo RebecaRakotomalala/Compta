@@ -33,7 +33,7 @@ public class AccountController : Controller
         {
             // Vérifier si l'utilisateur existe dans la base
             user = _context.Users
-                .FirstOrDefault(u => u.Username == model.Username && u.Password == model.Password);
+            .FirstOrDefault(u => u.Username == model.Username && u.Password == model.Password);
         }
         catch (Exception ex)
         {
