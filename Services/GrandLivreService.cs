@@ -51,19 +51,34 @@ namespace dadaApp.Services
                 return (false, "Une ou plusieurs écritures sont déjà lettrées", null);
 
             // Générer le numéro de lettrage
+            // Utiliser AsNoTracking() pour éviter les problèmes de cache
             var dernierLettrage = await _context.LettragesManuels
+                .AsNoTracking()
+                .Where(l => l.NumeroLettrage.StartsWith("LM"))
                 .OrderByDescending(l => l.NumeroLettrage)
                 .FirstOrDefaultAsync();
 
             int prochainNumero = 1;
-            if (dernierLettrage != null && dernierLettrage.NumeroLettrage.StartsWith("LM"))
+            if (dernierLettrage != null && !string.IsNullOrWhiteSpace(dernierLettrage.NumeroLettrage))
             {
                 var numStr = dernierLettrage.NumeroLettrage.Substring(2);
                 if (int.TryParse(numStr, out int num))
+                {
                     prochainNumero = num + 1;
+                    Console.WriteLine($"🔍 [C#] Dernier lettrage trouvé: {dernierLettrage.NumeroLettrage}, prochain: LM{prochainNumero:D4}");
+                }
+                else
+                {
+                    Console.WriteLine($"🔍 [C#] Impossible de parser le numéro: {numStr}");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"🔍 [C#] Aucun lettrage précédent trouvé, utilisation de LM0001");
             }
 
             string numeroLettrage = $"LM{prochainNumero:D4}";
+            Console.WriteLine($"🔍 [C#] Numéro de lettrage généré: {numeroLettrage}");
 
             // Sauvegarder les détails complets pour réintégration
             var details = ecritures.Select(e => new EcritureLettrageDetail
@@ -155,6 +170,100 @@ namespace dadaApp.Services
         }
 
         /// <summary>
+        /// Retourne la liste des clients NON lettrés (écritures avec NumeroLettrage nul)
+        /// dont la DateEcheance est comprise entre startDate (optionnel) et endDate (ou fin de semaine si null).
+        /// </summary>
+        public async Task<List<IssueClientViewModel>> GetClientsNonLettrésParEcheanceAsync(
+            DateTime? startDate,
+            DateTime? endDate,
+            string? clientFilter = null)
+        {
+            // Si endDate n'est pas fourni, utiliser la fin de la semaine courante (dimanche)
+            DateTime effectiveEnd;
+            if (endDate.HasValue)
+            {
+                // Utiliser la date de fin à 23:59:59
+                effectiveEnd = endDate.Value.Date.AddDays(1).AddTicks(-1);
+            }
+            else
+            {
+                var today = DateTime.Today;
+                int daysUntilSunday = ((int)DayOfWeek.Sunday - (int)today.DayOfWeek + 7) % 7;
+                effectiveEnd = today.AddDays(daysUntilSunday).AddDays(1).AddTicks(-1);
+            }
+
+            Console.WriteLine($"🔍 [C#] Issue: recherche des clients NON lettrés avec échéance <= {effectiveEnd:yyyy-MM-dd HH:mm}");
+            if (startDate.HasValue)
+            {
+                Console.WriteLine($"🔍 [C#] Issue: date de début prise en compte: {startDate.Value:yyyy-MM-dd}");
+            }
+
+            // Écritures NON lettrées avec une date d'échéance définie dans l'intervalle demandé
+            var query = _context.Ecritures
+                .AsNoTracking()
+                .Include(e => e.Compte)
+                .Where(e =>
+                    string.IsNullOrWhiteSpace(e.NumeroLettrage) &&
+                    e.DateEcheance.HasValue &&
+                    e.DateEcheance.Value <= effectiveEnd &&
+                    e.Compte != null &&
+                    !string.IsNullOrWhiteSpace(e.Compte.CodeClient));
+
+            if (!string.IsNullOrWhiteSpace(clientFilter))
+            {
+                var lowered = clientFilter.Trim().ToLower();
+                query = query.Where(e =>
+                    e.Compte != null &&
+                    (
+                        (e.Compte.NomClient != null && e.Compte.NomClient.ToLower().Contains(lowered)) ||
+                        (e.Compte.CodeClient != null && e.Compte.CodeClient.ToLower().Contains(lowered))
+                    ));
+            }
+
+            if (startDate.HasValue)
+            {
+                var start = startDate.Value.Date;
+                query = query.Where(e => e.DateEcheance!.Value.Date >= start);
+            }
+
+            var ecritures = await query.ToListAsync();
+
+            Console.WriteLine($"🔍 [C#] Issue: {ecritures.Count} écritures NON lettrées trouvées dans l'intervalle");
+
+            var result = ecritures
+                .OrderBy(e => e.Compte!.NomClient)
+                .ThenBy(e => e.DateEcheance)
+                .Select(e => new IssueClientViewModel
+                {
+                    CodeClient    = e.Compte!.CodeClient,
+                    NomClient     = e.Compte!.NomClient ?? e.Compte.CodeClient,
+                    EcritureId    = e.EcritureId,
+                    DateComptable = e.DateComptable,
+                    DateEcheance  = e.DateEcheance,
+                    NumeroPiece   = e.NumeroPiece,
+                    Libelle       = e.Libelle,
+                    Debit         = e.Debit,
+                    Credit        = e.Credit
+                })
+                .ToList();
+
+            Console.WriteLine($"🔍 [C#] Issue: {result.Count} écritures NON lettrées retournées pour l'affichage");
+
+            return result;
+        }
+
+        public async Task<List<string>> GetAllClientNamesAsync()
+        {
+            return await _context.Comptes
+                .AsNoTracking()
+                .Where(c => !string.IsNullOrWhiteSpace(c.NomClient))
+                .Select(c => c.NomClient!)
+                .Distinct()
+                .OrderBy(n => n)
+                .ToListAsync();
+        }
+
+        /// <summary>
         /// Propose automatiquement des lettrages pour les écritures non lettrées
         /// où la somme des débits - somme des crédits = 0, pour le même nom client
         /// </summary>
@@ -162,9 +271,14 @@ namespace dadaApp.Services
         {
             Console.WriteLine($"🔍 [C#] Début de ProposerLettragesAutomatiquesAsync (client: {nomClientFiltre ?? "tous"})");
             
+            // CRITIQUE : Vider le cache EF Core AVANT toute requête pour avoir les données fraîches
+            _context.ChangeTracker.Clear();
+            
             // Récupérer toutes les écritures non lettrées avec leur compte
-            Console.WriteLine("🔍 [C#] Récupération des écritures non lettrées...");
+            // Utiliser AsNoTracking() dès le début pour éviter tout cache
+            Console.WriteLine("🔍 [C#] Récupération des écritures non lettrées (sans cache)...");
             var query = _context.Ecritures
+                .AsNoTracking() // IMPORTANT : pas de tracking pour éviter le cache
                 .Include(e => e.Compte)
                 .Where(e => string.IsNullOrWhiteSpace(e.NumeroLettrage) && 
                            e.Compte != null && 
@@ -182,7 +296,7 @@ namespace dadaApp.Services
                 .ThenBy(e => e.DateComptable)
                 .ToListAsync();
 
-            Console.WriteLine($"🔍 [C#] {ecrituresNonLettre.Count} écritures non lettrées trouvées");
+            Console.WriteLine($"🔍 [C#] {ecrituresNonLettre.Count} écritures non lettrées trouvées (requête fraîche)");
 
             var propositions = new List<PropositionLettrage>();
 
@@ -194,8 +308,41 @@ namespace dadaApp.Services
 
             Console.WriteLine($"🔍 [C#] {groupesParClient.Count} groupes de clients trouvés");
 
+            // Les écritures ont déjà été récupérées avec AsNoTracking(), donc elles sont fraîches
+            // Mais on re-vérifie quand même pour être absolument sûr
+            Console.WriteLine("🔍 [C#] Double vérification en base de données des écritures non lettrées...");
+            
+            var idsEcritures = ecrituresNonLettre.Select(e => e.EcritureId).ToList();
+            
+            // Requête fraîche pour vérifier l'état réel en base
+            var ecrituresVraimentNonLettre = await _context.Ecritures
+                .AsNoTracking()
+                .Where(e => idsEcritures.Contains(e.EcritureId) && string.IsNullOrWhiteSpace(e.NumeroLettrage))
+                .Include(e => e.Compte)
+                .ToListAsync();
+            
+            var ecrituresExclues = ecrituresNonLettre.Count - ecrituresVraimentNonLettre.Count;
+            if (ecrituresExclues > 0)
+            {
+                Console.WriteLine($"🔍 [C#] ⚠️ {ecrituresExclues} écriture(s) exclue(s) car déjà lettrée(s) en base");
+            }
+            
+            Console.WriteLine($"🔍 [C#] {ecrituresVraimentNonLettre.Count} écritures confirmées non lettrées (sur {ecrituresNonLettre.Count} initiales)");
+            
+            // Re-grouper avec les écritures vérifiées
+            var groupesParClientVerifies = ecrituresVraimentNonLettre
+                .Where(e => e.Compte != null && !string.IsNullOrWhiteSpace(e.Compte.NomClient))
+                .GroupBy(e => e.Compte!.NomClient)
+                .ToList();
+            
+            var groupesInitiaux = ecrituresNonLettre
+                .GroupBy(e => e.Compte!.NomClient)
+                .Count();
+            
+            Console.WriteLine($"🔍 [C#] {groupesParClientVerifies.Count} groupes de clients vérifiés (sur {groupesInitiaux} initiaux)");
+
             int groupeIndex = 0;
-            foreach (var groupe in groupesParClient)
+            foreach (var groupe in groupesParClientVerifies)
             {
                 groupeIndex++;
                 var nomClient = groupe.Key;
@@ -209,7 +356,7 @@ namespace dadaApp.Services
                     ecrituresClient = ecrituresClient.Take(50).ToList();
                 }
 
-                Console.WriteLine($"🔍 [C#] Traitement du groupe {groupeIndex}/{groupesParClient.Count}: {nomClient} ({ecrituresClient.Count} écritures)");
+                Console.WriteLine($"🔍 [C#] Traitement du groupe {groupeIndex}/{groupesParClientVerifies.Count}: {nomClient} ({ecrituresClient.Count} écritures)");
 
                 // Trouver les combinaisons qui s'équilibrent
                 Console.WriteLine($"🔍 [C#] Recherche de combinaisons équilibrées pour {nomClient}...");
@@ -218,6 +365,23 @@ namespace dadaApp.Services
 
                 foreach (var combinaison in combinaisons)
                 {
+                    // Vérification supplémentaire : s'assurer que toutes les écritures de la combinaison sont toujours non lettrées
+                    var idsCombinaison = combinaison.Select(e => e.EcritureId).ToList();
+                    var ecrituresCombinaison = await _context.Ecritures
+                        .AsNoTracking()
+                        .Where(e => idsCombinaison.Contains(e.EcritureId))
+                        .Select(e => new { e.EcritureId, e.NumeroLettrage })
+                        .ToListAsync();
+                    
+                    var toutesNonLettre = ecrituresCombinaison.All(e => string.IsNullOrWhiteSpace(e.NumeroLettrage));
+                    
+                    if (!toutesNonLettre)
+                    {
+                        var lettrees = ecrituresCombinaison.Where(e => !string.IsNullOrWhiteSpace(e.NumeroLettrage)).Select(e => e.EcritureId).ToList();
+                        Console.WriteLine($"🔍 [C#] Combinaison pour {nomClient} IGNORÉE : {lettrees.Count} écriture(s) déjà lettrée(s) (IDs: {string.Join(", ", lettrees)})");
+                        continue;
+                    }
+                    
                     var totalDebit = combinaison.Sum(e => e.Debit);
                     var totalCredit = combinaison.Sum(e => e.Credit);
 
@@ -244,9 +408,12 @@ namespace dadaApp.Services
 
             Console.WriteLine($"🔍 [C#] Total de {propositions.Count} propositions trouvées");
 
+            // Les propositions ont déjà été vérifiées individuellement avant d'être ajoutées
+            // Pas besoin de vérification finale supplémentaire
+            
             // Trier par nombre d'écritures (du plus simple au plus complexe)
             var resultat = propositions.OrderBy(p => p.NombreEcritures).ToList();
-            Console.WriteLine($"🔍 [C#] Retour de {resultat.Count} propositions triées");
+            Console.WriteLine($"🔍 [C#] Retour de {resultat.Count} propositions triées (déjà vérifiées)");
             
             return resultat;
         }

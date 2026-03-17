@@ -259,15 +259,25 @@
 
     <!-- Section Propositions de Lettrage -->
     <div class="propositions-section" style="margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; gap: 10px; flex-wrap: wrap;">
             <h4 style="margin: 0; color: #495057;">
                 <i class="bi bi-lightbulb"></i>
                 Propositions de lettrage automatique
             </h4>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
             <button class="btn btn-primary" id="btnRechercherPropositions" onclick="rechercherPropositions()">
                 <i class="bi bi-search"></i>
                 Rechercher les propositions
             </button>
+                <button class="btn btn-secondary" id="btnSelectAllPropositions" onclick="selectionnerToutesPropositions()" style="display: none;">
+                    <i class="bi bi-check-square"></i>
+                    Sélectionner tout
+                </button>
+                <button class="btn btn-success" id="btnAppliquerSelection" onclick="appliquerPropositionsSelectionnees()" disabled>
+                    <i class="bi bi-check-circle"></i>
+                    Appliquer les propositions sélectionnées
+                </button>
+            </div>
         </div>
         
         <div id="propositionsContainer" style="display: none;">
@@ -734,9 +744,18 @@ async function rechercherPropositions() {
         
         if (result.success && result.propositions && result.propositions.length > 0) {
             console.log('🔍 [JS] Affichage des propositions dans le tableau:', result.propositions.length);
-            afficherPropositionsDansTableau(result.propositions);
-            afficherPropositions(result.propositions);
+            
+            // Filtrer les propositions pour exclure celles avec des écritures déjà lettrées
+            const propositionsFiltrees = afficherPropositionsDansTableau(result.propositions);
+            
+            // Afficher uniquement les propositions filtrées
+            if (propositionsFiltrees.length > 0) {
+                afficherPropositions(propositionsFiltrees);
             list.style.display = 'block';
+            } else {
+                console.log('🔍 [JS] Toutes les propositions contiennent des écritures déjà lettrées');
+                empty.style.display = 'block';
+            }
         } else {
             console.log('🔍 [JS] Aucune proposition trouvée');
             empty.style.display = 'block';
@@ -754,14 +773,42 @@ async function rechercherPropositions() {
 function afficherPropositionsDansTableau(propositions) {
     console.log('🔍 [JS] Affichage des propositions dans le tableau');
     
+    // Récupérer les IDs des écritures déjà lettrées depuis le tableau
+    const ecrituresLettre = new Set();
+    document.querySelectorAll('tr[data-ecriture-id]').forEach(row => {
+        const lettrageCell = row.querySelector('.lettrage-cell');
+        if (lettrageCell) {
+            const lettrageBadge = lettrageCell.querySelector('.lettrage-badge');
+            if (lettrageBadge) {
+                const ecritureId = parseInt(row.getAttribute('data-ecriture-id'), 10);
+                if (!isNaN(ecritureId)) {
+                    ecrituresLettre.add(ecritureId);
+                }
+            }
+        }
+    });
+    
+    console.log(`🔍 [JS] ${ecrituresLettre.size} écritures déjà lettrées détectées dans le tableau`);
+    
+    // Filtrer les propositions pour exclure celles avec des écritures déjà lettrées
+    const propositionsValides = propositions.filter(prop => {
+        const contientEcritureLettre = prop.ecritureIds.some(id => ecrituresLettre.has(id));
+        if (contientEcritureLettre) {
+            console.log(`🔍 [JS] Proposition pour ${prop.nomClient} exclue (contient écriture déjà lettrée)`);
+        }
+        return !contientEcritureLettre;
+    });
+    
+    console.log(`🔍 [JS] ${propositionsValides.length} propositions valides après filtrage (sur ${propositions.length} totales)`);
+    
     // Réinitialiser toutes les sélections précédentes
     document.querySelectorAll('.ecriture-checkbox').forEach(cb => {
         cb.checked = false;
         cb.closest('tr')?.classList.remove('proposition-highlight');
     });
     
-    // Pour chaque proposition, cocher les écritures correspondantes
-    propositions.forEach((prop, propIndex) => {
+    // Pour chaque proposition valide, cocher les écritures correspondantes
+    propositionsValides.forEach((prop, propIndex) => {
         prop.ecritureIds.forEach(ecritureId => {
             const checkbox = document.querySelector(`.ecriture-checkbox[value="${ecritureId}"]`);
             if (checkbox) {
@@ -784,10 +831,20 @@ function afficherPropositionsDansTableau(propositions) {
     }
     
     console.log('🔍 [JS] Propositions affichées dans le tableau');
+    
+    // Retourner les propositions filtrées pour l'affichage
+    return propositionsValides;
 }
 
 function afficherPropositions(propositions) {
     const list = document.getElementById('propositionsList');
+    const btnSelectAll = document.getElementById('btnSelectAllPropositions');
+    
+    // Afficher le bouton "Sélectionner tout" quand il y a des propositions
+    if (btnSelectAll && propositions.length > 0) {
+        btnSelectAll.style.display = 'inline-block';
+    }
+    
     let html = '<div style="display: grid; gap: 15px;">';
     
     propositions.forEach((prop, index) => {
@@ -795,17 +852,22 @@ function afficherPropositions(propositions) {
         const soldeColor = Math.abs(solde) < 0.01 ? '#28a745' : '#dc3545';
         
         html += `
-            <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" data-proposition-index="${index}">
                 <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
-                    <div>
+                    <div style="flex: 1;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                            <input type="checkbox"
+                                   class="proposition-checkbox"
+                                   data-ecritures="${prop.ecritureIds.join(',')}"
+                                   data-proposition-id="${index}"
+                                   id="prop-checkbox-${index}"
+                                   onchange="majSelectionPropositions()">
                         <strong style="color: #495057; font-size: 16px;">
                             <i class="bi bi-person"></i> ${prop.nomClient}
                         </strong>
-                        ${prop.codeClient ? `<br><small style="color: #6c757d;">Code: ${prop.codeClient}</small>` : ''}
                     </div>
-                    <button class="btn btn-success btn-sm" onclick="appliquerProposition([${prop.ecritureIds.join(',')}])">
-                        <i class="bi bi-check-circle"></i> Appliquer
-                    </button>
+                        ${prop.codeClient ? `<small style="color: #6c757d; margin-left: 28px;">Code: ${prop.codeClient}</small>` : ''}
+                    </div>
                 </div>
                 
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px;">
@@ -873,10 +935,191 @@ function afficherPropositions(propositions) {
 }
 
 async function appliquerProposition(ecritureIds) {
-    if (!confirm(`Voulez-vous créer un lettrage pour ${ecritureIds.length} écritures ?`)) {
+    // Fonction conservée pour compatibilité, sans boîtes de dialogue bloquantes
+    await creerLettragePourEcritures(ecritureIds);
+    location.reload();
+}
+
+function majSelectionPropositions() {
+    const checkboxes = document.querySelectorAll('.proposition-checkbox:checked');
+    const btn = document.getElementById('btnAppliquerSelection');
+    if (btn) {
+        btn.disabled = checkboxes.length === 0;
+    }
+}
+
+async function appliquerPropositionsSelectionnees() {
+    const checkboxes = document.querySelectorAll('.proposition-checkbox:checked');
+    if (checkboxes.length === 0) return;
+    
+    const btn = document.getElementById('btnAppliquerSelection');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-arrow-repeat spin"></i> Application en cours...';
+    }
+    
+    const toutesLesPromesses = [];
+    const erreurs = [];
+    const idsAppliques = [];
+    
+    for (const cb of checkboxes) {
+        const ids = (cb.dataset.ecritures || '')
+            .split(',')
+            .map(x => parseInt(x, 10))
+            .filter(x => !isNaN(x));
+        
+        if (ids.length > 0) {
+            idsAppliques.push(...ids);
+            toutesLesPromesses.push(
+                creerLettragePourEcritures(ids)
+                    .catch(error => {
+                        erreurs.push({ ids, error: error.message });
+                        return null;
+                    })
+            );
+        }
+    }
+    
+    try {
+        const resultats = await Promise.all(toutesLesPromesses);
+        const succes = resultats.filter(r => r !== null).length;
+        const echecs = erreurs.length;
+        
+        console.log(`✅ ${succes} lettrage(s) créé(s) avec succès`);
+        if (echecs > 0) {
+            console.error(`❌ ${echecs} lettrage(s) ont échoué:`, erreurs);
+        }
+        
+        // Créer un mapping : ID écriture -> Numéro lettrage
+        const mappingEcritureLettrage = new Map();
+        checkboxes.forEach((cb, index) => {
+            const ids = (cb.dataset.ecritures || '')
+                .split(',')
+                .map(x => parseInt(x, 10))
+                .filter(x => !isNaN(x));
+            
+            if (resultats[index] && resultats[index].numeroLettrage) {
+                const numeroLettrage = resultats[index].numeroLettrage;
+                ids.forEach(id => {
+                    mappingEcritureLettrage.set(id, numeroLettrage);
+                });
+            }
+        });
+        
+        console.log(`📋 Mapping créé: ${mappingEcritureLettrage.size} écritures mappées`);
+        
+        // Attendre un peu pour que la base de données soit à jour
+        console.log('⏳ Attente de la sauvegarde en base de données...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Retirer visuellement les propositions appliquées de l'affichage
+        console.log('🗑️ Retrait des propositions appliquées de l\'affichage...');
+        checkboxes.forEach(cb => {
+            const card = cb.closest('div[style*="background: white"]');
+            if (card) {
+                // Animation de disparition
+                card.style.transition = 'opacity 0.3s, transform 0.3s';
+                card.style.opacity = '0';
+                card.style.transform = 'translateX(-20px)';
+                setTimeout(() => {
+                    card.style.display = 'none';
+                }, 300);
+            }
+        });
+        
+        // Mettre à jour le tableau pour remplacer les checkboxes par les badges de lettrage
+        console.log('🔄 Mise à jour du tableau...');
+        mappingEcritureLettrage.forEach((numeroLettrage, ecritureId) => {
+            const row = document.querySelector(`tr[data-ecriture-id="${ecritureId}"]`);
+            if (row) {
+                const lettrageCell = row.querySelector('.lettrage-cell');
+                const checkbox = row.querySelector('.ecriture-checkbox');
+                
+                if (lettrageCell && checkbox) {
+                    // Remplacer la checkbox par le badge de lettrage
+                    lettrageCell.innerHTML = `<span class="lettrage-badge">${numeroLettrage}</span>`;
+                    // Retirer la classe de highlight
+                    row.classList.remove('proposition-highlight');
+                }
+            }
+        });
+        
+        // Mettre à jour la sélection
+        updateSelection();
+        
+        // Mettre à jour le compteur et le bouton
+        majSelectionPropositions();
+        
+        // Re-vérifier les propositions depuis le serveur pour mettre à jour l'affichage
+        // (cela va exclure automatiquement les propositions avec écritures lettrées)
+        console.log('🔄 Re-vérification des propositions depuis le serveur...');
+        await rechercherPropositions();
+        
+        console.log('✅ Mise à jour terminée');
+    } catch (e) {
+        console.error('Erreur lors de la création de certains lettrages', e);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-circle"></i> Appliquer les propositions sélectionnées';
+        }
+    }
+}
+
+function filtrerPropositionsLettre(idsEcrituresLettre) {
+    // Retirer les propositions qui contiennent des écritures déjà lettrées
+    const checkboxes = document.querySelectorAll('.proposition-checkbox');
+    checkboxes.forEach(cb => {
+        const ids = (cb.dataset.ecritures || '')
+            .split(',')
+            .map(x => parseInt(x, 10))
+            .filter(x => !isNaN(x));
+        
+        // Si cette proposition contient une écriture qui vient d'être lettrée, la masquer
+        const contientEcritureLettre = ids.some(id => idsEcrituresLettre.includes(id));
+        if (contientEcritureLettre) {
+            const card = cb.closest('div[style*="background: white"]');
+            if (card) {
+                card.style.display = 'none';
+            }
+        }
+    });
+    
+    // Mettre à jour le compteur et le bouton
+    majSelectionPropositions();
+}
+
+function selectionnerToutesPropositions() {
+    console.log('🔍 [JS] Sélectionner tout appelé');
+    const checkboxes = document.querySelectorAll('.proposition-checkbox');
+    console.log(`🔍 [JS] ${checkboxes.length} checkboxes trouvées`);
+    
+    if (checkboxes.length === 0) {
+        console.warn('🔍 [JS] Aucune checkbox trouvée');
         return;
     }
     
+    const btnSelectAll = document.getElementById('btnSelectAllPropositions');
+    const tousCoches = Array.from(checkboxes).every(cb => cb.checked);
+    const nouvelleValeur = !tousCoches;
+    
+    console.log(`🔍 [JS] Tous cochés: ${tousCoches}, nouvelle valeur: ${nouvelleValeur}`);
+    
+    checkboxes.forEach((cb, index) => {
+        cb.checked = nouvelleValeur;
+        console.log(`🔍 [JS] Checkbox ${index + 1} mise à ${nouvelleValeur}`);
+    });
+    
+    if (btnSelectAll) {
+        btnSelectAll.innerHTML = nouvelleValeur 
+            ? '<i class="bi bi-square"></i> Désélectionner tout'
+            : '<i class="bi bi-check-square"></i> Sélectionner tout';
+    }
+    
+    majSelectionPropositions();
+    console.log('🔍 [JS] Sélection mise à jour');
+}
+
+async function creerLettragePourEcritures(ecritureIds) {
     try {
         const response = await fetch('@Url.Action("CreerLettrage", "Grandlivre")', {
             method: 'POST',
@@ -886,17 +1129,21 @@ async function appliquerProposition(ecritureIds) {
             body: JSON.stringify(ecritureIds)
         });
         
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const result = await response.json();
         
-        if (result.success) {
-            alert(result.message);
-            location.reload();
-        } else {
-            alert('Erreur: ' + result.message);
+        if (!result.success) {
+            throw new Error(result.message || 'Erreur lors de la création du lettrage');
         }
+        
+        console.log('✅ Lettrage créé:', result.numeroLettrage);
+        return result;
     } catch (error) {
-        alert('Erreur de communication avec le serveur');
-        console.error(error);
+        console.error('❌ Erreur lors de la création du lettrage:', error);
+        throw error;
     }
 }
 
@@ -1013,9 +1260,16 @@ document.getElementById('validerLettrage')?.addEventListener('click', async func
         return;
     }
     
+    const btn = document.getElementById('validerLettrage');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-arrow-repeat spin"></i> Création...';
+    }
+    
     const ids = selectedEcritures.map(e => e.id);
     
     try {
+        console.log('📝 [JS] Création de lettrage manuel pour', ids.length, 'écritures');
         const response = await fetch('@Url.Action("CreerLettrage", "Grandlivre")', {
             method: 'POST',
             headers: {
@@ -1024,17 +1278,57 @@ document.getElementById('validerLettrage')?.addEventListener('click', async func
             body: JSON.stringify(ids)
         });
         
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const result = await response.json();
         
         if (result.success) {
-            alert(result.message);
-            location.reload();
+            console.log('✅ [JS] Lettrage créé:', result.numeroLettrage);
+            
+            // Attendre un peu pour que la base de données soit à jour
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
+            // Mettre à jour le tableau pour remplacer les checkboxes par les badges de lettrage
+            const numeroLettrage = result.numeroLettrage || 'LM';
+            ids.forEach(ecritureId => {
+                const row = document.querySelector(`tr[data-ecriture-id="${ecritureId}"]`);
+                if (row) {
+                    const lettrageCell = row.querySelector('.lettrage-cell');
+                    const checkbox = row.querySelector('.ecriture-checkbox');
+                    
+                    if (lettrageCell && checkbox) {
+                        // Remplacer la checkbox par le badge de lettrage
+                        lettrageCell.innerHTML = `<span class="lettrage-badge">${numeroLettrage}</span>`;
+                        // Retirer la classe de highlight
+                        row.classList.remove('proposition-highlight');
+                    }
+                }
+            });
+            
+            // Réinitialiser la sélection
+            resetSelection();
+            
+            // Re-vérifier les propositions depuis le serveur
+            console.log('🔄 [JS] Re-vérification des propositions...');
+            await rechercherPropositions();
+            
+            console.log('✅ [JS] Lettrage manuel créé avec succès');
         } else {
             alert('Erreur: ' + result.message);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-check-circle"></i> Valider le lettrage';
+            }
         }
     } catch (error) {
-        alert('Erreur de communication avec le serveur');
-        console.error(error);
+        console.error('❌ [JS] Erreur:', error);
+        alert('Erreur de communication avec le serveur: ' + error.message);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-circle"></i> Valider le lettrage';
+        }
     }
 });
 

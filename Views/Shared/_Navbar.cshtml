@@ -57,11 +57,22 @@
                 <!-- Bouton Historique des lettrages -->
                 <li>
                     <a asp-controller="Grandlivre" asp-action="HistoriqueLettrage" 
-                    class="nav-item @(currentAction == "HistoriqueLettrage" ? "active" : "")">
-                    <div class="nav-icon">
+                       class="nav-item @(currentAction == "HistoriqueLettrage" ? "active" : "")">
+                        <div class="nav-icon">
                             <i class="bi bi-clock-history"></i> 
                         </div>
                         <span class="nav-label">Histo LM</span>
+                        <div class="nav-indicator"></div>
+                    </a>
+                </li>
+                <!-- Bouton Issue -->
+                <li>
+                    <a asp-controller="Issue" asp-action="Index" 
+                       class="nav-item @(currentController == "Issue" ? "active" : "")">
+                        <div class="nav-icon">
+                            <i class="bi bi-flag"></i>
+                        </div>
+                        <span class="nav-label">Issue</span>
                         <div class="nav-indicator"></div>
                     </a>
                 </li>
@@ -114,10 +125,13 @@
             <!-- Bouton Historique dans le menu mobile -->
             <a asp-controller="Grandlivre" asp-action="HistoriqueLettrage" 
                class="mobile-item @(currentAction == "HistoriqueLettrage" ? "active" : "")">
-               <div class="nav-icon">
-                    <i class="bi bi-clock-history"></i>
-                </div>
+                <i class="bi bi-clock-history"></i>
                 <span>Histo LM</span>
+            </a>
+            <a asp-controller="Issue" asp-action="Index" 
+               class="mobile-item @(currentController == "Issue" ? "active" : "")">
+                <i class="bi bi-flag"></i>
+                <span>Issue</span>
             </a>
         </div>
     </div>

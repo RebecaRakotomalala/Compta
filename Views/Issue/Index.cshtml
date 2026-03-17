@@ -1,0 +1,268 @@
+@model List<dadaApp.Models.IssueClientViewModel>
+
+@{
+    ViewData["Title"] = "Issue";
+    Layout = null;
+
+    var clientNames = ViewBag.AllClientNames as List<string> ?? new List<string>();
+    var selectedClient = ViewBag.ClientFilter as string;
+}
+
+@await Html.PartialAsync("_Navbar")
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<link rel="stylesheet" href="~/css/issue.css" />
+
+<div class="issue-container">
+    <div class="issue-header">
+        <div class="issue-title-block">
+            <div class="issue-icon">
+                <i class="bi bi-flag"></i>
+            </div>
+            <div>
+                <h1 class="issue-title">Issue</h1>
+                <p class="issue-subtitle">
+                    Sélection des clients lettrés dont l'échéance arrive avant la fin de semaine.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <form asp-action="Index" method="get" class="issue-filters">
+        <div class="issue-filter-group">
+            <label for="StartDate" class="form-label">Date de début</label>
+            <input type="date"
+                   id="StartDate"
+                   name="startDate"
+                   class="form-control issue-date-input"
+                   value="@(ViewBag.StartDate != null ? ((DateTime)ViewBag.StartDate).ToString("yyyy-MM-dd") : "")" />
+            <small class="text-muted d-block mt-1">
+                Laissez vide pour prendre toutes les écritures jusqu'à la date de fin.
+            </small>
+        </div>
+        <div class="issue-filter-group">
+            <label for="EndDate" class="form-label">Date de fin</label>
+            <input type="date"
+                   id="EndDate"
+                   name="endDate"
+                   class="form-control issue-date-input"
+                   value="@(ViewBag.EndDate != null ? ((DateTime)ViewBag.EndDate).ToString("yyyy-MM-dd") : "")" />
+            <small class="text-muted d-block mt-1">
+                Si vide, la fin de la semaine courante sera utilisée automatiquement.
+            </small>
+        </div>
+        <div class="issue-filter-group">
+            <label class="form-label">
+                Client
+            </label>
+            <div class="custom-select-wrapper" id="issueClientSelectWrapper">
+                <input type="text"
+                       id="issueClientSearchInput"
+                       class="custom-select-search"
+                       placeholder="Rechercher ou sélectionner un client..."
+                       autocomplete="off"
+                       value="@selectedClient" />
+                <i class="bi bi-chevron-down custom-select-arrow"></i>
+
+                <div class="custom-select-dropdown" id="issueClientDropdown">
+                    <div class="custom-select-count" id="issueClientCount">
+                        @clientNames.Count clients disponibles
+                    </div>
+                    <div class="custom-select-option" data-value="">
+                        <strong>Tous les clients</strong>
+                    </div>
+                    @foreach (var client in clientNames)
+                    {
+                        <div class="custom-select-option" data-value="@client">
+                            @client
+                        </div>
+                    }
+                    <div class="custom-select-no-results" id="issueNoResults" style="display: none;">
+                        Aucun client trouvé
+                    </div>
+                </div>
+            </div>
+
+            <input type="hidden" name="client" id="issueClientHiddenInput" value="@selectedClient" />
+        </div>
+        <div class="issue-filters-actions">
+            <button type="submit" class="issue-btn issue-btn-secondary">
+                <i class="bi bi-x-circle"></i> Réinitialiser
+            </button>
+            <button type="submit" class="issue-btn issue-btn-primary">
+                <i class="bi bi-search"></i> Filtrer
+            </button>
+        </div>
+    </form>
+
+    <div class="issue-results-card">
+        <div class="issue-results-header">
+            <h2>
+                <i class="bi bi-people"></i>
+                Écritures non lettrées par échéance
+            </h2>
+            <small>
+                La période est :
+                @if (ViewBag.StartDate != null)
+                {
+                    <text>du @(((DateTime)ViewBag.StartDate).ToString("dd/MM/yyyy")) </text>
+                }
+                else
+                {
+                    <text>depuis le début </text>
+                }
+                @if (ViewBag.EndDate != null)
+                {
+                    <text>au @(((DateTime)ViewBag.EndDate).ToString("dd/MM/yyyy"))</text>
+                }
+                else
+                {
+                    <text>jusqu'à la fin de cette semaine</text>
+                }
+            </small>
+        </div>
+        <div class="issue-table-wrapper">
+            @if (Model != null && Model.Any())
+            {
+                <table class="issue-table">
+                    <thead>
+                        <tr>
+                            <th>Client</th>
+                            <th>Code</th>
+                            <th>Date comptable</th>
+                            <th>Date d'échéance</th>
+                            <th>Pièce</th>
+                            <th>Libellé</th>
+                            <th>Débit</th>
+                            <th>Crédit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var e in Model)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="issue-client-name">@e.NomClient</div>
+                                </td>
+                                <td>
+                                    <span class="issue-client-code">@e.CodeClient</span>
+                                </td>
+                                <td>@e.DateComptable.ToString("dd/MM/yyyy")</td>
+                                <td>
+                                    @if (e.DateEcheance.HasValue)
+                                    {
+                                        <span class="issue-tag">
+                                            <i class="bi bi-calendar-event"></i>
+                                            @e.DateEcheance.Value.ToString("dd/MM/yyyy")
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td>@e.NumeroPiece</td>
+                                <td>@e.Libelle</td>
+                                <td>@e.Debit.ToString("N2")</td>
+                                <td>@e.Credit.ToString("N2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <div class="issue-empty">
+                    <i class="bi bi-info-circle"></i>
+                    <p>Aucune écriture non lettrée trouvée pour la période sélectionnée.</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const wrapper = document.getElementById('issueClientSelectWrapper');
+        const searchInput = document.getElementById('issueClientSearchInput');
+        const hiddenInput = document.getElementById('issueClientHiddenInput');
+        const dropdown = document.getElementById('issueClientDropdown');
+        const options = dropdown.querySelectorAll('.custom-select-option');
+        const noResults = document.getElementById('issueNoResults');
+        const countDisplay = document.getElementById('issueClientCount');
+
+        let allOptions = Array.from(options);
+
+        const currentValue = hiddenInput.value;
+        if (currentValue) {
+            allOptions.forEach(opt => {
+                if (opt.dataset.value === currentValue) {
+                    opt.classList.add('selected');
+                }
+            });
+        }
+
+        function openDropdown() {
+            wrapper.classList.add('open');
+            filterOptions('');
+        }
+
+        searchInput.addEventListener('focus', openDropdown);
+        searchInput.addEventListener('click', openDropdown);
+
+        searchInput.addEventListener('input', function () {
+            const term = this.value.toLowerCase();
+            filterOptions(term);
+        });
+
+        function filterOptions(term) {
+            let visibleCount = 0;
+
+            allOptions.forEach(option => {
+                const text = option.textContent.toLowerCase();
+                const value = (option.dataset.value || '').toLowerCase();
+
+                if (!term || text.includes(term) || value.includes(term) || option.dataset.value === '') {
+                    option.classList.remove('hidden');
+                    visibleCount++;
+                } else {
+                    option.classList.add('hidden');
+                }
+            });
+
+            if (visibleCount <= 1) {
+                noResults.style.display = 'block';
+            } else {
+                noResults.style.display = 'none';
+            }
+
+            const actualCount = visibleCount - 1;
+            if (term) {
+                countDisplay.textContent = `${actualCount} client${actualCount > 1 ? 's' : ''} trouvé${actualCount > 1 ? 's' : ''}`;
+            } else {
+                countDisplay.textContent = `${actualCount} clients disponibles`;
+            }
+        }
+
+        allOptions.forEach(option => {
+            option.addEventListener('click', function () {
+                const value = this.dataset.value;
+                const text = this.textContent.trim();
+
+                searchInput.value = value === '' ? '' : text;
+                hiddenInput.value = value;
+
+                allOptions.forEach(opt => opt.classList.remove('selected'));
+                this.classList.add('selected');
+
+                wrapper.classList.remove('open');
+            });
+        });
+
+        document.addEventListener('click', function (e) {
+            if (!wrapper.contains(e.target)) {
+                wrapper.classList.remove('open');
+            }
+        });
+    });
+</script>

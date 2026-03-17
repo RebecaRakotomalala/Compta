@@ -404,7 +404,7 @@ namespace dadaApp.Services
                 if (longueurZone > 0)
                 {
                     string zoneMonnaie = ligne.Substring(bang1 + 1, Math.Min(longueurZone, ligne.Length - bang1 - 1));
-                    
+
                     // Méthode hybride : combiner positions fixes et détection dynamique
                     // Le format standard a ~27 caractères entre les "!" : 14 débit + 13 crédit
                     if (zoneMonnaie.Length >= LEN_DEBIT + LEN_CREDIT)
@@ -472,8 +472,8 @@ namespace dadaApp.Services
                     candidat = nettoye.ToString();
                     
                     if (candidat.Length > 0 && candidat.Length <= 20)
-                    {
-                        numeroLettrage = candidat;
+                {
+                    numeroLettrage = candidat;
                     }
                 }
             }
