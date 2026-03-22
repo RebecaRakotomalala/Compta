@@ -1,4 +1,4 @@
-@model List<LettrageManuel>
+@model List<LettrageHistoriqueViewModel>
 
 @{
     ViewData["Title"] = "Historique des Lettrages";
@@ -15,9 +15,17 @@
                 <i class="bi bi-clock-history"></i>
                 Historique des Lettrages Manuels
             </h1>
-            <p class="subtitle">Consultez tous les lettrages effectués</p>
+            <p class="subtitle">
+                Après une réinitialisation des écritures et un nouvel import, les lettrages enregistrés ici peuvent être réappliqués automatiquement si les lignes correspondent (même client, dates, pièces, libellés et montants).
+            </p>
         </div>
         <div class="header-actions">
+            @if (Model != null && Model.Count > 0)
+            {
+                <button type="button" class="btn btn-success" onclick="restaurerTousLettrages()" title="Réappliquer tous les lettrages encore possibles">
+                    <i class="bi bi-arrow-counterclockwise"></i> Restaurer tout
+                </button>
+            }
             <button class="btn btn-danger" onclick="supprimerToutLettrage()">
                 <i class="bi bi-trash-fill"></i> Supprimer Tout
             </button>
@@ -29,6 +37,7 @@
 
     @if (Model != null && Model.Count > 0)
     {
+        var lettrages = Model.Select(m => m.Lettrage).ToList();
         <div class="historique-stats">
             <div class="stat-card">
                 <div class="stat-icon">
@@ -44,7 +53,7 @@
                     <i class="bi bi-calendar-event"></i>
                 </div>
                 <div class="stat-content">
-                    <div class="stat-value">@Model.Max(l => l.DateCreation).ToString("dd/MM/yyyy")</div>
+                    <div class="stat-value">@lettrages.Max(l => l.DateCreation).ToString("dd/MM/yyyy")</div>
                     <div class="stat-label">Plus Récent</div>
                 </div>
             </div>
@@ -53,7 +62,7 @@
                     <i class="bi bi-cash-coin"></i>
                 </div>
                 <div class="stat-content">
-                    <div class="stat-value">@Model.Sum(l => l.TotalDebit).ToString("N2")</div>
+                    <div class="stat-value">@lettrages.Sum(l => l.TotalDebit).ToString("N2")</div>
                     <div class="stat-label">Total Débits</div>
                 </div>
             </div>
@@ -64,6 +73,7 @@
                 <thead>
                     <tr>
                         <th>Numéro Lettrage</th>
+                        <th>État</th>
                         <th>Client</th>
                         <th>Date de Création</th>
                         <th>Total Débit</th>
@@ -72,11 +82,26 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var lettrage in Model.OrderByDescending(l => l.DateCreation))
+                    @foreach (var item in Model.OrderByDescending(x => x.Lettrage.DateCreation))
                     {
+                        var lettrage = item.Lettrage;
                         <tr class="row-item">
                             <td class="numero-cell">
                                 <span class="badge-numero">@lettrage.NumeroLettrage</span>
+                            </td>
+                            <td class="etat-cell">
+                                @if (item.EstApplique)
+                                {
+                                    <span class="badge-etat badge-etat-ok"><i class="bi bi-check-circle"></i> En place</span>
+                                }
+                                else if (item.NombreLignesSnapshot > 0)
+                                {
+                                    <span class="badge-etat badge-etat-pending"><i class="bi bi-exclamation-circle"></i> À restaurer</span>
+                                }
+                                else
+                                {
+                                    <span class="badge-etat badge-etat-warn"><i class="bi bi-question-circle"></i> Snapshot incomplet</span>
+                                }
                             </td>
                             <td class="client-cell">
                                 @if (!string.IsNullOrWhiteSpace(lettrage.NomClient))
@@ -101,6 +126,15 @@
                                 <span class="montant">@lettrage.TotalCredit.ToString("N2")</span>
                             </td>
                             <td class="actions-cell">
+                                @if (!item.EstApplique && item.NombreLignesSnapshot > 0)
+                                {
+                                    <button type="button" class="btn-action btn-restore" onclick="restaurerLettrage('@lettrage.NumeroLettrage')" title="Réappliquer ce lettrage sur les écritures">
+                                        <i class="bi bi-arrow-counterclockwise"></i>
+                                    </button>
+                                }
+                                <a href="@Url.Action("Listes", new { client = string.IsNullOrWhiteSpace(lettrage.NomClient) ? lettrage.CodeClient : lettrage.NomClient, filterType = "non-lettre" })" class="btn-action btn-manual" title="Lettrage manuel (grand livre)">
+                                    <i class="bi bi-ui-checks"></i>
+                                </a>
                                 <button class="btn-action btn-view" onclick="afficherDetails('@lettrage.NumeroLettrage')" title="Voir détails">
                                     <i class="bi bi-eye"></i>
                                 </button>
@@ -144,9 +178,35 @@
 
 <script>
     function afficherDetails(numeroLettrage) {
-        // Vous pouvez faire un appel AJAX ici pour charger les détails
         alert(`Détails du lettrage: ${numeroLettrage}`);
         // TODO: Charger les écritures associées via AJAX
+    }
+
+    function restaurerLettrage(numeroLettrage) {
+        fetch('@Url.Action("RestaurerLettrageHistorique")', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(numeroLettrage)
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message);
+            if (data.success) location.reload();
+        })
+        .catch(err => console.error(err));
+    }
+
+    function restaurerTousLettrages() {
+        if (!confirm('Réappliquer tous les lettrages possibles sur les écritures actuelles ? Les lettrages déjà en place seront ignorés.')) {
+            return;
+        }
+        fetch('@Url.Action("RestaurerTousLettragesHistorique")', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message);
+            if (data.success || (data.reussites && data.reussites > 0)) location.reload();
+        })
+        .catch(err => console.error(err));
     }
 
     function supprimerLettrage(numeroLettrage) {

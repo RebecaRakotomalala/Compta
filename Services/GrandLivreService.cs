@@ -169,6 +169,230 @@ namespace dadaApp.Services
                 .ToListAsync();
         }
 
+        private static readonly JsonSerializerOptions JsonLettrageSnapshotOptions = new()
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
+        private static string NormTxt(string? s) => (s ?? string.Empty).Trim();
+
+        private static bool MontantsEgaux(decimal a, decimal b) => Math.Abs(a - b) < 0.01m;
+
+        private static bool DetailCorrespondAEcriture(Ecriture e, string numeroCompte, EcritureLettrageDetail d)
+        {
+            if (!string.Equals(NormTxt(numeroCompte), NormTxt(d.NumeroCompte), StringComparison.Ordinal))
+                return false;
+            if (e.DateComptable.Date != d.DateComptable.Date)
+                return false;
+            if (!string.Equals(NormTxt(e.CodeJournal), NormTxt(d.CodeJournal), StringComparison.Ordinal))
+                return false;
+            if (!string.Equals(NormTxt(e.NumeroPiece), NormTxt(d.NumeroPiece), StringComparison.Ordinal))
+                return false;
+            if (!string.Equals(NormTxt(e.Libelle), NormTxt(d.Libelle), StringComparison.Ordinal))
+                return false;
+            if (!MontantsEgaux(e.Debit, d.Debit) || !MontantsEgaux(e.Credit, d.Credit))
+                return false;
+            return true;
+        }
+
+        private List<EcritureLettrageDetail>? LireDetailsSnapshot(LettrageManuel lm)
+        {
+            if (string.IsNullOrWhiteSpace(lm.EcrituresJson))
+                return null;
+            try
+            {
+                return JsonSerializer.Deserialize<List<EcritureLettrageDetail>>(lm.EcrituresJson, JsonLettrageSnapshotOptions);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private List<int>? AssocierEcrituresAuSnapshot(
+            List<EcritureLettrageDetail> details,
+            List<Ecriture> ecrituresClient,
+            string numeroLettrageCible,
+            out string? erreur)
+        {
+            erreur = null;
+            var eligibles = ecrituresClient
+                .Where(e => e.Compte != null &&
+                            (string.IsNullOrWhiteSpace(e.NumeroLettrage) || e.NumeroLettrage == numeroLettrageCible))
+                .ToList();
+
+            var utilisees = new HashSet<int>();
+            var parIndex = new int?[details.Count];
+
+            for (var i = 0; i < details.Count; i++)
+            {
+                var d = details[i];
+                if (d.EcritureId <= 0)
+                    continue;
+
+                var parId = eligibles.FirstOrDefault(e =>
+                    e.EcritureId == d.EcritureId &&
+                    !utilisees.Contains(e.EcritureId) &&
+                    DetailCorrespondAEcriture(e, e.Compte!.NumeroCompte, d));
+
+                if (parId != null)
+                {
+                    utilisees.Add(parId.EcritureId);
+                    parIndex[i] = parId.EcritureId;
+                }
+            }
+
+            for (var i = 0; i < details.Count; i++)
+            {
+                if (parIndex[i].HasValue)
+                    continue;
+
+                var d = details[i];
+                var cand = eligibles.FirstOrDefault(e =>
+                    !utilisees.Contains(e.EcritureId) &&
+                    DetailCorrespondAEcriture(e, e.Compte!.NumeroCompte, d));
+
+                if (cand == null)
+                {
+                    erreur =
+                        "Impossible de retrouver toutes les lignes (client, date, journal, pièce, libellé, montants et compte doivent correspondre à l’import).";
+                    return null;
+                }
+
+                utilisees.Add(cand.EcritureId);
+                parIndex[i] = cand.EcritureId;
+            }
+
+            return parIndex.Select(x => x!.Value).ToList();
+        }
+
+        private async Task<bool> LettrageEntierementAppliqueAsync(LettrageManuel lm)
+        {
+            var details = LireDetailsSnapshot(lm);
+            if (details == null || details.Count == 0)
+                return false;
+
+            var nb = await _context.Ecritures.CountAsync(e => e.NumeroLettrage == lm.NumeroLettrage);
+            return nb == details.Count;
+        }
+
+        public async Task<List<LettrageHistoriqueViewModel>> GetLettragesPourHistoriqueAsync()
+        {
+            var liste = await _context.LettragesManuels
+                .OrderByDescending(l => l.DateCreation)
+                .ToListAsync();
+
+            var result = new List<LettrageHistoriqueViewModel>();
+            foreach (var lm in liste)
+            {
+                var details = LireDetailsSnapshot(lm);
+                var n = details?.Count ?? 0;
+                var estApplique = details != null && n > 0 && await LettrageEntierementAppliqueAsync(lm);
+
+                result.Add(new LettrageHistoriqueViewModel
+                {
+                    Lettrage = lm,
+                    EstApplique = estApplique,
+                    NombreLignesSnapshot = n
+                });
+            }
+
+            return result;
+        }
+
+        public async Task<(bool success, string message)> RestaurerLettrageDepuisHistoriqueAsync(string numeroLettrage)
+        {
+            var lm = await _context.LettragesManuels
+                .FirstOrDefaultAsync(l => l.NumeroLettrage == numeroLettrage);
+
+            if (lm == null)
+                return (false, "Lettrage introuvable dans l’historique");
+
+            var details = LireDetailsSnapshot(lm);
+            if (details == null || details.Count == 0)
+                return (false, "Snapshot des écritures vide ou illisible");
+
+            if (await LettrageEntierementAppliqueAsync(lm))
+                return (true, $"Le lettrage {numeroLettrage} est déjà appliqué sur les écritures.");
+
+            var ecritures = await _context.Ecritures
+                .Include(e => e.Compte)
+                .Where(e => e.Compte != null && e.Compte.CodeClient == lm.CodeClient)
+                .ToListAsync();
+
+            var ids = AssocierEcrituresAuSnapshot(details, ecritures, lm.NumeroLettrage, out var err);
+            if (ids == null)
+                return (false, err ?? "Correspondance impossible");
+
+            if (ids.Count != details.Count)
+                return (false, $"Correspondance incomplète ({ids.Count}/{details.Count}).");
+
+            var aMettreAJour = await _context.Ecritures
+                .Where(e => ids.Contains(e.EcritureId))
+                .ToListAsync();
+
+            var autresLettrages = aMettreAJour
+                .Where(e => !string.IsNullOrWhiteSpace(e.NumeroLettrage) && e.NumeroLettrage != lm.NumeroLettrage)
+                .Select(e => e.NumeroLettrage)
+                .Distinct()
+                .ToList();
+
+            if (autresLettrages.Count > 0)
+                return (false,
+                    "Une ou plusieurs lignes sont déjà lettrées autrement : " + string.Join(", ", autresLettrages));
+
+            var totalDebit = aMettreAJour.Sum(x => x.Debit);
+            var totalCredit = aMettreAJour.Sum(x => x.Credit);
+            if (Math.Abs(totalDebit - totalCredit) > 0.01m)
+                return (false, "Les lignes retrouvées ne sont pas équilibrées (débit ≠ crédit).");
+
+            foreach (var e in aMettreAJour)
+                e.NumeroLettrage = lm.NumeroLettrage;
+
+            await _context.SaveChangesAsync();
+            return (true, $"Lettrage {numeroLettrage} réappliqué sur {ids.Count} écriture(s).");
+        }
+
+        public async Task<(bool success, string message, int reussites, int ignores, int echecs)> RestaurerTousLettragesDepuisHistoriqueAsync()
+        {
+            var tous = await _context.LettragesManuels
+                .OrderBy(l => l.DateCreation)
+                .ToListAsync();
+
+            var reussites = 0;
+            var ignores = 0;
+            var echecs = 0;
+            var messagesEchec = new List<string>();
+
+            foreach (var lm in tous)
+            {
+                if (await LettrageEntierementAppliqueAsync(lm))
+                {
+                    ignores++;
+                    continue;
+                }
+
+                var r = await RestaurerLettrageDepuisHistoriqueAsync(lm.NumeroLettrage);
+                if (r.success)
+                    reussites++;
+                else
+                {
+                    echecs++;
+                    messagesEchec.Add($"{lm.NumeroLettrage}: {r.message}");
+                }
+            }
+
+            var resume =
+                $"{reussites} réussi(s), {ignores} déjà en place, {echecs} échec(s).";
+            if (messagesEchec.Count > 0)
+                resume += " Détails : " + string.Join(" | ", messagesEchec.Take(5));
+            if (messagesEchec.Count > 5)
+                resume += " …";
+
+            var ok = echecs == 0 || reussites > 0;
+            return (ok, resume, reussites, ignores, echecs);
+        }
+
         /// <summary>
         /// Retourne la liste des clients NON lettrés (écritures avec NumeroLettrage nul)
         /// dont la DateEcheance est comprise entre startDate (optionnel) et endDate (ou fin de semaine si null).

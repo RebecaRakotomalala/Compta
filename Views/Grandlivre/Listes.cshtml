@@ -958,54 +958,38 @@ async function appliquerPropositionsSelectionnees() {
         btn.innerHTML = '<i class="bi bi-arrow-repeat spin"></i> Application en cours...';
     }
     
-    const toutesLesPromesses = [];
     const erreurs = [];
-    const idsAppliques = [];
-    
-    for (const cb of checkboxes) {
-        const ids = (cb.dataset.ecritures || '')
-            .split(',')
-            .map(x => parseInt(x, 10))
-            .filter(x => !isNaN(x));
-        
-        if (ids.length > 0) {
-            idsAppliques.push(...ids);
-            toutesLesPromesses.push(
-                creerLettragePourEcritures(ids)
-                    .catch(error => {
-                        erreurs.push({ ids, error: error.message });
-                        return null;
-                    })
-            );
-        }
-    }
-    
+    // Un lettrage à la fois : en parallèle, le serveur lit le même "dernier numéro" pour tous → doublons LM0001.
+    const mappingEcritureLettrage = new Map();
+    let succes = 0;
+
     try {
-        const resultats = await Promise.all(toutesLesPromesses);
-        const succes = resultats.filter(r => r !== null).length;
-        const echecs = erreurs.length;
-        
-        console.log(`✅ ${succes} lettrage(s) créé(s) avec succès`);
-        if (echecs > 0) {
-            console.error(`❌ ${echecs} lettrage(s) ont échoué:`, erreurs);
-        }
-        
-        // Créer un mapping : ID écriture -> Numéro lettrage
-        const mappingEcritureLettrage = new Map();
-        checkboxes.forEach((cb, index) => {
+        for (const cb of checkboxes) {
             const ids = (cb.dataset.ecritures || '')
                 .split(',')
                 .map(x => parseInt(x, 10))
                 .filter(x => !isNaN(x));
-            
-            if (resultats[index] && resultats[index].numeroLettrage) {
-                const numeroLettrage = resultats[index].numeroLettrage;
-                ids.forEach(id => {
-                    mappingEcritureLettrage.set(id, numeroLettrage);
-                });
+
+            if (ids.length === 0) continue;
+
+            try {
+                const result = await creerLettragePourEcritures(ids);
+                if (result && result.numeroLettrage) {
+                    ids.forEach(id => mappingEcritureLettrage.set(id, result.numeroLettrage));
+                    succes++;
+                }
+            } catch (error) {
+                erreurs.push({ ids, error: error.message || String(error) });
+                console.error('❌ Lettrage échoué pour une proposition:', error);
             }
-        });
-        
+        }
+
+        const echecs = erreurs.length;
+        console.log(`✅ ${succes} lettrage(s) créé(s) avec succès`);
+        if (echecs > 0) {
+            console.error(`❌ ${echecs} lettrage(s) ont échoué:`, erreurs);
+        }
+
         console.log(`📋 Mapping créé: ${mappingEcritureLettrage.size} écritures mappées`);
         
         // Attendre un peu pour que la base de données soit à jour
@@ -1047,9 +1031,6 @@ async function appliquerPropositionsSelectionnees() {
         // Mettre à jour la sélection
         updateSelection();
         
-        // Mettre à jour le compteur et le bouton
-        majSelectionPropositions();
-        
         // Re-vérifier les propositions depuis le serveur pour mettre à jour l'affichage
         // (cela va exclure automatiquement les propositions avec écritures lettrées)
         console.log('🔄 Re-vérification des propositions depuis le serveur...');
@@ -1058,10 +1039,11 @@ async function appliquerPropositionsSelectionnees() {
         console.log('✅ Mise à jour terminée');
     } catch (e) {
         console.error('Erreur lors de la création de certains lettrages', e);
+    } finally {
         if (btn) {
-            btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-check-circle"></i> Appliquer les propositions sélectionnées';
         }
+        majSelectionPropositions();
     }
 }
 

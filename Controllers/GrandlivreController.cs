@@ -104,8 +104,29 @@ namespace dadaApp.Controllers
 
         public async Task<IActionResult> HistoriqueLettrage()
         {
-            var lettrages = await _grandLivreService.GetLettrageManuelsAsync();
+            var lettrages = await _grandLivreService.GetLettragesPourHistoriqueAsync();
             return View(lettrages);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> RestaurerLettrageHistorique([FromBody] string numeroLettrage)
+        {
+            var result = await _grandLivreService.RestaurerLettrageDepuisHistoriqueAsync(numeroLettrage);
+            return Json(new { success = result.success, message = result.message });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> RestaurerTousLettragesHistorique()
+        {
+            var result = await _grandLivreService.RestaurerTousLettragesDepuisHistoriqueAsync();
+            return Json(new
+            {
+                success = result.success,
+                message = result.message,
+                reussites = result.reussites,
+                ignores = result.ignores,
+                echecs = result.echecs
+            });
         }
 
         /// <summary>
