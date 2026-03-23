@@ -50,37 +50,10 @@ namespace dadaApp.Services
             if (ecritures.Any(e => !string.IsNullOrWhiteSpace(e.NumeroLettrage)))
                 return (false, "Une ou plusieurs écritures sont déjà lettrées", null);
 
-            // Générer le numéro de lettrage
-            // Utiliser AsNoTracking() pour éviter les problèmes de cache
-            var dernierLettrage = await _context.LettragesManuels
-                .AsNoTracking()
-                .Where(l => l.NumeroLettrage.StartsWith("LM"))
-                .OrderByDescending(l => l.NumeroLettrage)
-                .FirstOrDefaultAsync();
+            var codeClient = ecritures.First().Compte!.CodeClient!;
+            var nomClient = ecritures.First().Compte!.NomClient ?? "";
 
-            int prochainNumero = 1;
-            if (dernierLettrage != null && !string.IsNullOrWhiteSpace(dernierLettrage.NumeroLettrage))
-            {
-                var numStr = dernierLettrage.NumeroLettrage.Substring(2);
-                if (int.TryParse(numStr, out int num))
-                {
-                    prochainNumero = num + 1;
-                    Console.WriteLine($"🔍 [C#] Dernier lettrage trouvé: {dernierLettrage.NumeroLettrage}, prochain: LM{prochainNumero:D4}");
-                }
-                else
-                {
-                    Console.WriteLine($"🔍 [C#] Impossible de parser le numéro: {numStr}");
-                }
-            }
-            else
-            {
-                Console.WriteLine($"🔍 [C#] Aucun lettrage précédent trouvé, utilisation de LM0001");
-            }
-
-            string numeroLettrage = $"LM{prochainNumero:D4}";
-            Console.WriteLine($"🔍 [C#] Numéro de lettrage généré: {numeroLettrage}");
-
-            // Sauvegarder les détails complets pour réintégration
+            // Snapshot (identique logique que restauration : pas d’ID, seulement le métier)
             var details = ecritures.Select(e => new EcritureLettrageDetail
             {
                 EcritureId = e.EcritureId,
@@ -94,28 +67,95 @@ namespace dadaApp.Services
                 NumeroCompte = e.Compte?.NumeroCompte ?? ""
             }).ToList();
 
-            var lettrageManuel = new LettrageManuel
-            {
-                NumeroLettrage = numeroLettrage,
-                DateCreation = DateTime.UtcNow,
-                CodeClient = ecritures.First().Compte!.CodeClient!,
-                NomClient = ecritures.First().Compte!.NomClient ?? "",
-                TotalDebit = totalDebit,
-                TotalCredit = totalCredit,
-                EcrituresJson = JsonSerializer.Serialize(details)
-            };
+            var cleNouvelle = CleMultisetLettrage(details);
 
-            _context.LettragesManuels.Add(lettrageManuel);
+            // Même groupe déjà en historique (ex. réimport + nouveau lettrage) → une seule ligne, pas de doublon ni « fantôme »
+            var candidatsMemeGroupe = new List<LettrageManuel>();
+            var historiquesClient = await _context.LettragesManuels
+                .Where(l => l.CodeClient == codeClient)
+                .ToListAsync();
 
-            // Mettre à jour les écritures
-            foreach (var ecriture in ecritures)
+            foreach (var lm in historiquesClient)
             {
-                ecriture.NumeroLettrage = numeroLettrage;
+                var ancienDetails = LireDetailsSnapshot(lm);
+                if (ancienDetails == null || ancienDetails.Count != details.Count)
+                    continue;
+                if (CleMultisetLettrage(ancienDetails) != cleNouvelle)
+                    continue;
+                candidatsMemeGroupe.Add(lm);
             }
+
+            string numeroLettrage;
+            bool fusionHistorique = candidatsMemeGroupe.Count > 0;
+
+            if (fusionHistorique)
+            {
+                var garde = candidatsMemeGroupe
+                    .OrderByDescending(l => l.DateCreation)
+                    .ThenByDescending(l => l.NumeroLettrage, StringComparer.Ordinal)
+                    .First();
+
+                foreach (var lm in candidatsMemeGroupe.Where(l => l.Id != garde.Id))
+                    _context.LettragesManuels.Remove(lm);
+
+                garde.DateCreation = DateTime.UtcNow;
+                garde.NomClient = nomClient;
+                garde.TotalDebit = totalDebit;
+                garde.TotalCredit = totalCredit;
+                garde.EcrituresJson = JsonSerializer.Serialize(details);
+                numeroLettrage = garde.NumeroLettrage;
+                Console.WriteLine($"🔍 [C#] Fusion avec historique existant: {numeroLettrage}");
+            }
+            else
+            {
+                var dernierLettrage = await _context.LettragesManuels
+                    .AsNoTracking()
+                    .Where(l => l.NumeroLettrage.StartsWith("LM"))
+                    .OrderByDescending(l => l.NumeroLettrage)
+                    .FirstOrDefaultAsync();
+
+                var prochainNumero = 1;
+                if (dernierLettrage != null && !string.IsNullOrWhiteSpace(dernierLettrage.NumeroLettrage))
+                {
+                    var numStr = dernierLettrage.NumeroLettrage.Substring(2);
+                    if (int.TryParse(numStr, out var num))
+                    {
+                        prochainNumero = num + 1;
+                        Console.WriteLine($"🔍 [C#] Dernier lettrage trouvé: {dernierLettrage.NumeroLettrage}, prochain: LM{prochainNumero:D4}");
+                    }
+                    else
+                        Console.WriteLine($"🔍 [C#] Impossible de parser le numéro: {numStr}");
+                }
+                else
+                    Console.WriteLine($"🔍 [C#] Aucun lettrage précédent trouvé, utilisation de LM0001");
+
+                numeroLettrage = $"LM{prochainNumero:D4}";
+                Console.WriteLine($"🔍 [C#] Numéro de lettrage généré: {numeroLettrage}");
+
+                var lettrageManuel = new LettrageManuel
+                {
+                    NumeroLettrage = numeroLettrage,
+                    DateCreation = DateTime.UtcNow,
+                    CodeClient = codeClient,
+                    NomClient = nomClient,
+                    TotalDebit = totalDebit,
+                    TotalCredit = totalCredit,
+                    EcrituresJson = JsonSerializer.Serialize(details)
+                };
+
+                _context.LettragesManuels.Add(lettrageManuel);
+            }
+
+            foreach (var ecriture in ecritures)
+                ecriture.NumeroLettrage = numeroLettrage;
 
             await _context.SaveChangesAsync();
 
-            return (true, $"Lettrage {numeroLettrage} créé avec succès", numeroLettrage);
+            var msg = fusionHistorique
+                ? $"Lettrage {numeroLettrage} enregistré (historique fusionné : même opération que précédemment, sans doublon)."
+                : $"Lettrage {numeroLettrage} créé avec succès";
+
+            return (true, msg, numeroLettrage);
         }
 
         public async Task<(bool success, string message)> SupprimerLettrageManuelAsync(string numeroLettrage)
@@ -175,6 +215,16 @@ namespace dadaApp.Services
         };
 
         private static string NormTxt(string? s) => (s ?? string.Empty).Trim();
+
+        /// <summary>Clé canonique du groupe d’écritures (hors EcritureId), pour détecter un doublon logique dans l’historique.</summary>
+        private static string CleMultisetLettrage(IEnumerable<EcritureLettrageDetail> lignes)
+        {
+            return string.Join("\u001f",
+                lignes
+                    .Select(d =>
+                        $"{d.DateComptable.Date:yyyy-MM-dd}|{NormTxt(d.CodeJournal)}|{NormTxt(d.NumeroPiece)}|{NormTxt(d.Libelle)}|{d.Debit:F2}|{d.Credit:F2}|{NormTxt(d.NumeroCompte)}")
+                    .OrderBy(x => x, StringComparer.Ordinal));
+        }
 
         private static bool MontantsEgaux(decimal a, decimal b) => Math.Abs(a - b) < 0.01m;
 
