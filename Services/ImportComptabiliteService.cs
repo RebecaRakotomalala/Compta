@@ -263,11 +263,18 @@ namespace dadaApp.Services
                 return;
             }
 
-            // Détecter si tokens[1] ressemble à un code client (numérique ou court)
-            // Ex: "00066" → code client ; "COLLECTIF" → début du nom
-            if (tokens[1].All(char.IsDigit))
+            // Détecter si tokens[1] ressemble à un code client
+            // Ex: "00066", "00360", "00360C" → code client ; "COLLECTIF" → début du nom
+            // Règle: chaîne compacte alphanumérique (sans espace), contenant au moins un chiffre.
+            var secondToken = tokens[1].Trim();
+            var ressembleCodeClient =
+                secondToken.Length <= 12 &&
+                secondToken.Any(char.IsDigit) &&
+                secondToken.All(char.IsLetterOrDigit);
+
+            if (ressembleCodeClient)
             {
-                codeClient = tokens[1];
+                codeClient = secondToken;
                 nomClient  = tokens.Length > 2
                     ? string.Join(" ", tokens.Skip(2))
                     : codeClient;
