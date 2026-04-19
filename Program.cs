@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using dadaApp.Data;
 using dadaApp.Models;
 using dadaApp.Services;
@@ -100,7 +101,7 @@ if (connString != null && (connString.StartsWith("postgres://", StringComparison
     if (host.Contains("render.com", StringComparison.OrdinalIgnoreCase)
         && interim.IndexOf("SSL", StringComparison.OrdinalIgnoreCase) < 0)
     {
-        connBuilder.Append("SSL Mode=Require;Trust Server Certificate=true;");
+        connBuilder.Append("SSL Mode=Require;");
     }
 
     // Hostname without a dot is almost always a truncated copy-paste (missing .xxx-postgres.render.com).
@@ -122,6 +123,8 @@ if (string.IsNullOrWhiteSpace(connString))
             ? "Configure ConnectionStrings:DefaultConnection in appsettings.json"
             : "Configure DATABASE_URL environment variable or ConnectionStrings:DefaultConnection"));
 }
+
+connString = TuneConnectionForRenderHosting(connString);
 
 // Log connection info (without password for security)
 var connInfo = connString;
@@ -153,22 +156,56 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    try
+
+    var skipMigrate =
+        string.Equals(Environment.GetEnvironmentVariable("SKIP_STARTUP_MIGRATIONS"),
+            "true",
+            StringComparison.OrdinalIgnoreCase);
+
+    if (skipMigrate)
     {
-        db.Database.Migrate();
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine("Warning: could not apply migrations: " + ex.Message);
         Console.WriteLine(
-            "Causes fréquentes sur Render : URL PostgreSQL tronquée (hôte sans .render.com), " +
-            "SSL manquant (ajout auto pour *.render.com), ou mauvaise DATABASE_URL.");
-        Console.WriteLine("Stack (premiers 500 car.) : " +
-                          (ex.StackTrace != null && ex.StackTrace.Length > 500
-                              ? ex.StackTrace[..500]
-                              : ex.StackTrace));
-        if (!app.Environment.IsDevelopment())
-            throw;
+            "SKIP_STARTUP_MIGRATIONS=true — aucune migration au démarrage (temporaire). Appliquez les migrations à la main (Render Shell ou CI).");
+    }
+    else
+    {
+        const int migrateAttempts = 6;
+        Exception? migrateFailure = null;
+
+        for (var attempt = 1; attempt <= migrateAttempts; attempt++)
+        {
+            try
+            {
+                db.Database.Migrate();
+                migrateFailure = null;
+                if (attempt > 1)
+                    Console.WriteLine($"Migrations appliquées au bout de la tentative {attempt}.");
+                break;
+            }
+            catch (Exception ex)
+            {
+                migrateFailure = ex;
+                Console.WriteLine($"Migration tentative {attempt}/{migrateAttempts} : {ex.Message}");
+                if (ex.InnerException != null)
+                    Console.WriteLine($"  → Cause interne : {ex.InnerException.Message}");
+
+                if (attempt < migrateAttempts)
+                    Thread.Sleep(TimeSpan.FromSeconds(Math.Min(25, 4 * attempt)));
+            }
+        }
+
+        if (migrateFailure != null)
+        {
+            var ex = migrateFailure;
+            Console.WriteLine("Erreur migrations après plusieurs tentatives : " + ex.Message);
+            Console.WriteLine(
+                "Astuces Render : même région pour le Web Service et la base ; essayez « External Database URL » " +
+                "dans DATABASE_URL si l’internal échoue au démarrage ; SCRAM/TLS → Channel Binding désactivé dans le code.");
+            Console.WriteLine(
+                "Pour débloquer un déploiement : SKIP_STARTUP_MIGRATIONS=true puis appliquez les migrations manuellement.");
+            if (!app.Environment.IsDevelopment())
+                throw migrateFailure;
+        }
     }
 
     try
@@ -257,3 +294,28 @@ else
 }
 
 app.Run();
+
+/// <summary>
+/// Ajustements pour PostgreSQL managé Render (SCRAM/TLS): délais, désactivation du channel binding TLS
+/// (certains réseaux font tomber la connexion pendant Authenticate sans cela).
+/// </summary>
+static string TuneConnectionForRenderHosting(string connectionString)
+{
+    try
+    {
+        var b = new NpgsqlConnectionStringBuilder(connectionString);
+        if (string.IsNullOrEmpty(b.Host) ||
+            !b.Host.Contains("render.com", StringComparison.OrdinalIgnoreCase))
+            return connectionString;
+
+        b.SslMode = SslMode.Require;
+        b.Timeout = Math.Max(b.Timeout, 120);
+        b.ChannelBinding = ChannelBinding.Disable;
+        return b.ConnectionString;
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("Warning: TuneConnectionForRenderHosting: " + ex.Message);
+        return connectionString;
+    }
+}
