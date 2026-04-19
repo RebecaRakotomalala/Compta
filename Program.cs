@@ -69,7 +69,17 @@ if (connString != null && (connString.StartsWith("postgres://", StringComparison
     var host = uri.Host;
     var port = uri.Port;
     var database = uri.AbsolutePath.TrimStart('/');
-    
+
+    // URL copiée à moitié : « ...@dpg-xxxxx-a/nomdb » sans « .oregon-postgres.render.com » → connexion impossible (EndOfStream).
+    if (host.StartsWith("dpg-", StringComparison.OrdinalIgnoreCase) &&
+        host.IndexOf('.', StringComparison.Ordinal) < 0)
+    {
+        throw new InvalidOperationException(
+            "DATABASE_URL invalide : l'hôte doit être la copie complète depuis Render → PostgreSQL → Connect " +
+            "(Internal Database URL), par ex. dpg-xxxxx-a.REGION-postgres.render.com — pas seulement dpg-xxxxx-a. " +
+            "Vérifie aussi utilisateur et base : pas « root », utilise l'utilisateur affiché par Render.");
+    }
+
     // start with basic connection parameters
     var connBuilder = new System.Text.StringBuilder();
     connBuilder.Append($"Host={host};");
