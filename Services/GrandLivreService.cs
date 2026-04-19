@@ -526,6 +526,125 @@ namespace dadaApp.Services
             return result;
         }
 
+        /// <summary>
+        /// Lundi (00h) du lundi au dimanche — semaine calendaire type FR (lun–dim).
+        /// </summary>
+        private static DateTime DebutSemaineLundi(DateTime date)
+        {
+            var d = date.Date;
+            var diff = (7 + (d.DayOfWeek - DayOfWeek.Monday)) % 7;
+            return d.AddDays(-diff);
+        }
+
+        /// <summary>
+        /// Issue par colonnes : S-2, S-1, semaine courante, S+1, S+2 (selon la date d’échéance).
+        /// </summary>
+        public async Task<IssueDashboardViewModel> GetIssueDashboardParSemainesAsync(string? clientFilter = null)
+        {
+            var aujourdHui = DateTime.Today;
+            var lundiReference = DebutSemaineLundi(aujourdHui);
+
+            var dateMin = lundiReference.AddDays(-14);
+            var dateMax = lundiReference.AddDays(14 + 6);
+
+            var query = _context.Ecritures
+                .AsNoTracking()
+                .Include(e => e.Compte)
+                .Where(e =>
+                    string.IsNullOrWhiteSpace(e.NumeroLettrage) &&
+                    e.DateEcheance.HasValue &&
+                    e.Compte != null &&
+                    !string.IsNullOrWhiteSpace(e.Compte.CodeClient) &&
+                    e.DateEcheance!.Value.Date >= dateMin &&
+                    e.DateEcheance!.Value.Date <= dateMax);
+
+            if (!string.IsNullOrWhiteSpace(clientFilter))
+            {
+                var lowered = clientFilter.Trim().ToLower();
+                query = query.Where(e =>
+                    e.Compte != null &&
+                    (
+                        (e.Compte.NomClient != null && e.Compte.NomClient.ToLower().Contains(lowered)) ||
+                        (e.Compte.CodeClient != null && e.Compte.CodeClient.ToLower().Contains(lowered))
+                    ));
+            }
+
+            var ecritures = await query.ToListAsync();
+
+            var titres = new[]
+            {
+                ("m2", "Il y a 2 semaines", -2),
+                ("m1", "Semaine dernière", -1),
+                ("s0", "Cette semaine", 0),
+                ("p1", "Semaine prochaine", 1),
+                ("p2", "Dans 2 semaines", 2)
+            };
+
+            var colonnes = titres.Select(t =>
+            {
+                var lundi = lundiReference.AddDays(t.Item3 * 7);
+                var dimanche = lundi.AddDays(6);
+                return new IssueWeekColumnViewModel
+                {
+                    Id = t.Item1,
+                    Titre = t.Item2,
+                    LundiSemaine = lundi,
+                    PeriodeLibelle = $"du {lundi:dd/MM} au {dimanche:dd/MM yyyy}",
+                    Clients = new List<IssueClientBlocViewModel>()
+                };
+            }).ToList();
+
+            var dictColonnes = colonnes.ToDictionary(c => c.LundiSemaine.Date);
+
+            foreach (var e in ecritures.OrderBy(x => x.Compte!.NomClient).ThenBy(x => x.DateEcheance))
+            {
+                var lundiEc = DebutSemaineLundi(e.DateEcheance!.Value);
+                if (!dictColonnes.TryGetValue(lundiEc.Date, out var colonne))
+                    continue;
+
+                var vm = new IssueClientViewModel
+                {
+                    CodeClient = e.Compte!.CodeClient,
+                    NomClient = e.Compte!.NomClient ?? e.Compte.CodeClient,
+                    EcritureId = e.EcritureId,
+                    DateComptable = e.DateComptable,
+                    DateEcheance = e.DateEcheance,
+                    NumeroPiece = e.NumeroPiece,
+                    Libelle = e.Libelle,
+                    Debit = e.Debit,
+                    Credit = e.Credit
+                };
+
+                var code = vm.CodeClient ?? "";
+                var bloc = colonne.Clients.FirstOrDefault(b => b.CodeClient == code);
+                if (bloc == null)
+                {
+                    bloc = new IssueClientBlocViewModel
+                    {
+                        CodeClient = vm.CodeClient,
+                        NomClient = vm.NomClient,
+                        Ecritures = new List<IssueClientViewModel>()
+                    };
+                    colonne.Clients.Add(bloc);
+                }
+
+                bloc.Ecritures.Add(vm);
+                bloc.TotalDebit += vm.Debit;
+                bloc.TotalCredit += vm.Credit;
+                colonne.TotalDebit += vm.Debit;
+                colonne.TotalCredit += vm.Credit;
+            }
+
+            foreach (var c in colonnes)
+            {
+                c.Clients = c.Clients
+                    .OrderBy(b => b.NomClient)
+                    .ToList();
+            }
+
+            return new IssueDashboardViewModel { Semaines = colonnes };
+        }
+
         public async Task<List<string>> GetAllClientNamesAsync()
         {
             return await _context.Comptes

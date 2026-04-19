@@ -1,4 +1,4 @@
-@model List<dadaApp.Models.IssueClientViewModel>
+@model dadaApp.Models.IssueDashboardViewModel
 
 @{
     ViewData["Title"] = "Issue";
@@ -6,6 +6,10 @@
 
     var clientNames = ViewBag.AllClientNames as List<string> ?? new List<string>();
     var selectedClient = ViewBag.ClientFilter as string;
+
+    var grandDebit = Model?.Semaines != null ? Model.Semaines.Sum(s => s.TotalDebit) : 0m;
+    var grandCredit = Model?.Semaines != null ? Model.Semaines.Sum(s => s.TotalCredit) : 0m;
+    var nbEcritures = Model?.Semaines != null ? Model.Semaines.Sum(s => s.Clients.Sum(c => c.Ecritures.Count)) : 0;
 }
 
 @await Html.PartialAsync("_Navbar")
@@ -13,48 +17,25 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 <link rel="stylesheet" href="~/css/issue.css" />
 
-<div class="issue-container">
+<div class="issue-container issue-container--wide">
     <div class="issue-header">
         <div class="issue-title-block">
             <div class="issue-icon">
-                <i class="bi bi-flag"></i>
+                <i class="bi bi-calendar-week"></i>
             </div>
             <div>
-                <h1 class="issue-title">Issue</h1>
+                <h1 class="issue-title">Issue par semaine</h1>
                 <p class="issue-subtitle">
-                    Sélection des clients lettrés dont l'échéance arrive avant la fin de semaine.
+                    Écritures <strong>non lettrées</strong>, réparties selon la <strong>date d’échéance</strong>.
+                    Cinq fenêtres : il y a 2 semaines, semaine dernière, cette semaine, semaine prochaine, dans 2 semaines (lun–dim).
                 </p>
             </div>
         </div>
     </div>
 
-    <form asp-action="Index" method="get" class="issue-filters">
-        <div class="issue-filter-group">
-            <label for="StartDate" class="form-label">Date de début</label>
-            <input type="date"
-                   id="StartDate"
-                   name="startDate"
-                   class="form-control issue-date-input"
-                   value="@(ViewBag.StartDate != null ? ((DateTime)ViewBag.StartDate).ToString("yyyy-MM-dd") : "")" />
-            <small class="text-muted d-block mt-1">
-                Laissez vide pour prendre toutes les écritures jusqu'à la date de fin.
-            </small>
-        </div>
-        <div class="issue-filter-group">
-            <label for="EndDate" class="form-label">Date de fin</label>
-            <input type="date"
-                   id="EndDate"
-                   name="endDate"
-                   class="form-control issue-date-input"
-                   value="@(ViewBag.EndDate != null ? ((DateTime)ViewBag.EndDate).ToString("yyyy-MM-dd") : "")" />
-            <small class="text-muted d-block mt-1">
-                Si vide, la fin de la semaine courante sera utilisée automatiquement.
-            </small>
-        </div>
-        <div class="issue-filter-group">
-            <label class="form-label">
-                Client
-            </label>
+    <form asp-action="Index" method="get" class="issue-filters issue-filters--compact">
+        <div class="issue-filter-group issue-filter-group--grow">
+            <label class="form-label">Client</label>
             <div class="custom-select-wrapper" id="issueClientSelectWrapper">
                 <input type="text"
                        id="issueClientSearchInput"
@@ -86,99 +67,132 @@
             <input type="hidden" name="client" id="issueClientHiddenInput" value="@selectedClient" />
         </div>
         <div class="issue-filters-actions">
-            <button type="submit" class="issue-btn issue-btn-secondary">
+            <a asp-action="Index" class="issue-btn issue-btn-secondary">
                 <i class="bi bi-x-circle"></i> Réinitialiser
-            </button>
+            </a>
             <button type="submit" class="issue-btn issue-btn-primary">
                 <i class="bi bi-search"></i> Filtrer
             </button>
         </div>
     </form>
 
-    <div class="issue-results-card">
-        <div class="issue-results-header">
-            <h2>
-                <i class="bi bi-people"></i>
-                Écritures non lettrées par échéance
-            </h2>
-            <small>
-                La période est :
-                @if (ViewBag.StartDate != null)
-                {
-                    <text>du @(((DateTime)ViewBag.StartDate).ToString("dd/MM/yyyy")) </text>
+    @if (Model?.Semaines != null && Model.Semaines.Any())
+    {
+        <div class="issue-weeks-board-wrapper">
+            <div class="issue-weeks-board">
+                @{
+                    var idx = 0;
                 }
-                else
+                @foreach (var sem in Model.Semaines)
                 {
-                    <text>depuis le début </text>
+                    idx++;
+                    var modifier = sem.Id switch
+                    {
+                        "m2" or "m1" => "issue-week-col--past",
+                        "s0" => "issue-week-col--current",
+                        _ => "issue-week-col--future"
+                    };
+                    var anyLine = sem.Clients.Sum(c => c.Ecritures.Count) > 0;
+
+                    <section class="issue-week-col @modifier" aria-labelledby="week-title-@sem.Id">
+                        <header class="issue-week-col-head">
+                            <span class="issue-week-badge">@(sem.Id == "s0" ? "→ " : "")@idx / 5</span>
+                            <h2 id="week-title-@sem.Id" class="issue-week-title">@sem.Titre</h2>
+                            <p class="issue-week-period"><i class="bi bi-calendar3"></i> @sem.PeriodeLibelle</p>
+                            <div class="issue-week-totals">
+                                <div class="issue-week-total-row">
+                                    <span>Débit</span>
+                                    <strong>@sem.TotalDebit.ToString("N2")</strong>
+                                </div>
+                                <div class="issue-week-total-row">
+                                    <span>Crédit</span>
+                                    <strong>@sem.TotalCredit.ToString("N2")</strong>
+                                </div>
+                            </div>
+                        </header>
+
+                        <div class="issue-week-col-body">
+                            @if (!anyLine)
+                            {
+                                <div class="issue-week-empty">
+                                    <i class="bi bi-check2-circle"></i>
+                                    <span>Aucune échéance cette semaine</span>
+                                </div>
+                            }
+                            else
+                            {
+                                @foreach (var bloc in sem.Clients)
+                                {
+                                    <details class="issue-client-bloc"@Html.Raw(sem.Clients.Count <= 3 ? " open" : "")>
+                                        <summary class="issue-client-bloc-sum">
+                                            <span class="issue-client-bloc-name" title="@bloc.NomClient">
+                                                @bloc.NomClient
+                                            </span>
+                                            <span class="issue-client-bloc-meta">
+                                                <span class="issue-client-code">@bloc.CodeClient</span>
+                                                <span class="issue-client-subtot">
+                                                    @bloc.TotalDebit.ToString("N2") / @bloc.TotalCredit.ToString("N2")
+                                                </span>
+                                            </span>
+                                        </summary>
+                                        <div class="issue-mini-table-wrap">
+                                            <table class="issue-mini-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Échéance</th>
+                                                        <th>Pièce</th>
+                                                        <th class="num">Débit</th>
+                                                        <th class="num">Crédit</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var ec in bloc.Ecritures)
+                                                    {
+                                                        <tr>
+                                                            <td>
+                                                                @if (ec.DateEcheance.HasValue)
+                                                                {
+                                                                    <span>@ec.DateEcheance.Value.ToString("dd/MM/yy")</span>
+                                                                }
+                                                                else { <span class="text-muted">-</span>; }
+                                                            </td>
+                                                            <td class="issue-mini-piece" title="@ec.Libelle">@(ec.NumeroPiece ?? "-")</td>
+                                                            <td class="num">@ec.Debit.ToString("N2")</td>
+                                                            <td class="num">@ec.Credit.ToString("N2")</td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </details>
+                                }
+                            }
+                        </div>
+                    </section>
                 }
-                @if (ViewBag.EndDate != null)
-                {
-                    <text>au @(((DateTime)ViewBag.EndDate).ToString("dd/MM/yyyy"))</text>
-                }
-                else
-                {
-                    <text>jusqu'à la fin de cette semaine</text>
-                }
-            </small>
+            </div>
         </div>
-        <div class="issue-table-wrapper">
-            @if (Model != null && Model.Any())
-            {
-                <table class="issue-table">
-                    <thead>
-                        <tr>
-                            <th>Client</th>
-                            <th>Code</th>
-                            <th>Date comptable</th>
-                            <th>Date d'échéance</th>
-                            <th>Pièce</th>
-                            <th>Libellé</th>
-                            <th>Débit</th>
-                            <th>Crédit</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var e in Model)
-                        {
-                            <tr>
-                                <td>
-                                    <div class="issue-client-name">@e.NomClient</div>
-                                </td>
-                                <td>
-                                    <span class="issue-client-code">@e.CodeClient</span>
-                                </td>
-                                <td>@e.DateComptable.ToString("dd/MM/yyyy")</td>
-                                <td>
-                                    @if (e.DateEcheance.HasValue)
-                                    {
-                                        <span class="issue-tag">
-                                            <i class="bi bi-calendar-event"></i>
-                                            @e.DateEcheance.Value.ToString("dd/MM/yyyy")
-                                        </span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted">-</span>
-                                    }
-                                </td>
-                                <td>@e.NumeroPiece</td>
-                                <td>@e.Libelle</td>
-                                <td>@e.Debit.ToString("N2")</td>
-                                <td>@e.Credit.ToString("N2")</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            }
-            else
-            {
-                <div class="issue-empty">
-                    <i class="bi bi-info-circle"></i>
-                    <p>Aucune écriture non lettrée trouvée pour la période sélectionnée.</p>
-                </div>
-            }
+
+        @if (nbEcritures > 0)
+        {
+            <div class="issue-grand-total">
+                <span><i class="bi bi-calculator"></i> Synthèse sur les 5 semaines (@nbEcritures ligne(s))</span>
+                <span class="issue-grand-total-nums">
+                    Débit <strong>@grandDebit.ToString("N2")</strong>
+                    · Crédit <strong>@grandCredit.ToString("N2")</strong>
+                </span>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="issue-results-card">
+            <div class="issue-empty">
+                <i class="bi bi-info-circle"></i>
+                <p>Aucune donnée à afficher.</p>
+            </div>
         </div>
-    </div>
+    }
 </div>
 
 <script>
