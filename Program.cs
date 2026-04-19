@@ -196,15 +196,26 @@ using (var scope = app.Services.CreateScope())
 
         if (migrateFailure != null)
         {
-            var ex = migrateFailure;
-            Console.WriteLine("Erreur migrations après plusieurs tentatives : " + ex.Message);
+            Console.WriteLine("Erreur migrations après plusieurs tentatives : " + migrateFailure.Message);
             Console.WriteLine(
-                "Astuces Render : même région pour le Web Service et la base ; essayez « External Database URL » " +
-                "dans DATABASE_URL si l’internal échoue au démarrage ; SCRAM/TLS → Channel Binding désactivé dans le code.");
+                "Astuces Render : même région Web + DB ; essayez External Database URL ; vérifie le nom d’utilisateur " +
+                "PostgreSQL dans Render → Connect (ce n’est en général pas « root »).");
             Console.WriteLine(
-                "Pour débloquer un déploiement : SKIP_STARTUP_MIGRATIONS=true puis appliquez les migrations manuellement.");
-            if (!app.Environment.IsDevelopment())
+                "Variables utiles : SKIP_STARTUP_MIGRATIONS=true ; RENDER_ALLOW_START_WITHOUT_DB=true (démarrage sans DB, pour débloquer le déploiement).");
+
+            var allowStartWithoutDb =
+                string.Equals(Environment.GetEnvironmentVariable("RENDER_ALLOW_START_WITHOUT_DB"),
+                    "true",
+                    StringComparison.OrdinalIgnoreCase);
+
+            if (!app.Environment.IsDevelopment() && !allowStartWithoutDb)
                 throw migrateFailure;
+
+            if (allowStartWithoutDb)
+            {
+                Console.WriteLine(
+                    "RENDER_ALLOW_START_WITHOUT_DB=true — le serveur HTTP va démarrer malgré tout ; corrigez DATABASE_URL puis redeployez sans cette variable.");
+            }
         }
     }
 
@@ -311,6 +322,15 @@ static string TuneConnectionForRenderHosting(string connectionString)
         b.SslMode = SslMode.Require;
         b.Timeout = Math.Max(b.Timeout, 120);
         b.ChannelBinding = ChannelBinding.Disable;
+        b.Multiplexing = false;
+
+        if (string.Equals(b.Username, "root", StringComparison.Ordinal))
+        {
+            Console.WriteLine(
+                "WARNING: PostgreSQL Username=root. Sur Render, le nom d’utilisateur est affiché dans PostgreSQL → Connect " +
+                "(souvent du type « utilisateur_xyz », pas « root »). Une DATABASE_URL incorrecte provoque des erreurs au login.");
+        }
+
         return b.ConnectionString;
     }
     catch (Exception ex)
