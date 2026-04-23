@@ -515,6 +515,7 @@ namespace dadaApp.Services
                     DateComptable = e.DateComptable,
                     DateEcheance  = e.DateEcheance,
                     NumeroPiece   = e.NumeroPiece,
+                    NumeroFacture = e.Reference,
                     Libelle       = e.Libelle,
                     Debit         = e.Debit,
                     Credit        = e.Credit
@@ -537,14 +538,15 @@ namespace dadaApp.Services
         }
 
         /// <summary>
-        /// Issue par colonnes : S-2, S-1, semaine courante, S+1, S+2 (selon la date d’échéance).
+        /// Issue par colonnes : "S-2 et avant", S-1, semaine courante, S+1, S+2
+        /// (selon la date d’échéance).
         /// </summary>
         public async Task<IssueDashboardViewModel> GetIssueDashboardParSemainesAsync(string? clientFilter = null)
         {
             var aujourdHui = DateTime.Today;
             var lundiReference = DebutSemaineLundi(aujourdHui);
 
-            var dateMin = lundiReference.AddDays(-14);
+            var lundiSemaineMoins2 = lundiReference.AddDays(-14);
             var dateMax = lundiReference.AddDays(14 + 6);
 
             var query = _context.Ecritures
@@ -555,7 +557,6 @@ namespace dadaApp.Services
                     e.DateEcheance.HasValue &&
                     e.Compte != null &&
                     !string.IsNullOrWhiteSpace(e.Compte.CodeClient) &&
-                    e.DateEcheance!.Value.Date >= dateMin &&
                     e.DateEcheance!.Value.Date <= dateMax);
 
             if (!string.IsNullOrWhiteSpace(clientFilter))
@@ -573,7 +574,7 @@ namespace dadaApp.Services
 
             var titres = new[]
             {
-                ("m2", "Il y a 2 semaines", -2),
+                ("m2", "Il y a 2 semaines et avant", -2),
                 ("m1", "Semaine dernière", -1),
                 ("s0", "Cette semaine", 0),
                 ("p1", "Semaine prochaine", 1),
@@ -599,6 +600,10 @@ namespace dadaApp.Services
             foreach (var e in ecritures.OrderBy(x => x.Compte!.NomClient).ThenBy(x => x.DateEcheance))
             {
                 var lundiEc = DebutSemaineLundi(e.DateEcheance!.Value);
+                // Toute échéance antérieure à la semaine S-2 va dans la 1ère colonne (cumul "et avant").
+                if (lundiEc < lundiSemaineMoins2)
+                    lundiEc = lundiSemaineMoins2;
+
                 if (!dictColonnes.TryGetValue(lundiEc.Date, out var colonne))
                     continue;
 
@@ -610,6 +615,7 @@ namespace dadaApp.Services
                     DateComptable = e.DateComptable,
                     DateEcheance = e.DateEcheance,
                     NumeroPiece = e.NumeroPiece,
+                    NumeroFacture = e.Reference,
                     Libelle = e.Libelle,
                     Debit = e.Debit,
                     Credit = e.Credit

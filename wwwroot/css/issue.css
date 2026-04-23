@@ -517,10 +517,6 @@ body {
     background: var(--gray-50);
 }
 
-.issue-client-bloc-sum::-webkit-details-marker {
-    display: none;
-}
-
 .issue-client-bloc-name {
     font-weight: 600;
     max-width: 100%;
@@ -541,8 +537,127 @@ body {
 
 .issue-client-subtot {
     font-variant-numeric: tabular-nums;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.45rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+}
+
+.issue-client-subtot--debit {
+    background: rgba(59, 130, 246, 0.12);
+    color: #1d4ed8;
+    border-color: rgba(59, 130, 246, 0.25);
+}
+
+.issue-client-subtot--credit {
+    background: rgba(16, 185, 129, 0.12);
+    color: #047857;
+    border-color: rgba(16, 185, 129, 0.25);
+}
+
+.issue-client-bloc-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.65rem;
+}
+
+.issue-client-lines {
     font-size: 0.78rem;
     color: var(--gray-600);
+}
+
+.issue-detail-btn {
+    padding: 0.32rem 0.65rem;
+    font-size: 0.78rem;
+    border-radius: 8px;
+}
+
+.issue-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1200;
+    padding: 1rem;
+}
+
+.issue-modal-overlay.open {
+    display: flex;
+}
+
+.issue-modal-content {
+    width: min(1050px, 96vw);
+    max-height: 88vh;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(2, 6, 23, 0.35);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.issue-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    padding: 0.9rem 1rem;
+    border-bottom: 1px solid var(--gray-100);
+}
+
+.issue-modal-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.issue-modal-close {
+    border: none;
+    background: transparent;
+    font-size: 1.6rem;
+    line-height: 1;
+    color: var(--gray-600);
+    cursor: pointer;
+}
+
+.issue-modal-body {
+    overflow: auto;
+    padding: 0.8rem 1rem 1rem;
+}
+
+.issue-modal-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.83rem;
+}
+
+.issue-modal-table th,
+.issue-modal-table td {
+    padding: 0.5rem 0.45rem;
+    border-bottom: 1px solid var(--gray-100);
+    text-align: left;
+    vertical-align: top;
+}
+
+.issue-modal-table th {
+    position: sticky;
+    top: 0;
+    background: #f8fafc;
+    z-index: 1;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--gray-600);
+}
+
+.issue-modal-table .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
 }
 
 .issue-mini-table-wrap {

@@ -27,7 +27,7 @@
                 <h1 class="issue-title">Issue par semaine</h1>
                 <p class="issue-subtitle">
                     Écritures <strong>non lettrées</strong>, réparties selon la <strong>date d’échéance</strong>.
-                    Cinq fenêtres : il y a 2 semaines, semaine dernière, cette semaine, semaine prochaine, dans 2 semaines (lun–dim).
+                    Cinq fenêtres : il y a 2 semaines et avant, semaine dernière, cette semaine, semaine prochaine, dans 2 semaines (lun–dim).
                 </p>
             </div>
         </div>
@@ -82,6 +82,7 @@
             <div class="issue-weeks-board">
                 @{
                     var idx = 0;
+                    var detailIndex = 0;
                 }
                 @foreach (var sem in Model.Semaines)
                 {
@@ -123,48 +124,64 @@
                             {
                                 @foreach (var bloc in sem.Clients)
                                 {
-                                    <details class="issue-client-bloc"@Html.Raw(sem.Clients.Count <= 3 ? " open" : "")>
-                                        <summary class="issue-client-bloc-sum">
+                                    detailIndex++;
+                                    var detailId = $"issueDetail_{sem.Id}_{detailIndex}";
+                                    var modalTitle = $"{bloc.NomClient} ({bloc.CodeClient}) - {sem.Titre}";
+                                    <div class="issue-client-bloc">
+                                        <div class="issue-client-bloc-sum">
                                             <span class="issue-client-bloc-name" title="@bloc.NomClient">
                                                 @bloc.NomClient
                                             </span>
                                             <span class="issue-client-bloc-meta">
-                                                <span class="issue-client-code">@bloc.CodeClient</span>
-                                                <span class="issue-client-subtot">
-                                                    @bloc.TotalDebit.ToString("N2") / @bloc.TotalCredit.ToString("N2")
+                                                <span class="issue-client-subtot issue-client-subtot--debit">
+                                                    Débit: @bloc.TotalDebit.ToString("N2")
+                                                </span>
+                                                <span class="issue-client-subtot issue-client-subtot--credit">
+                                                    Crédit: @bloc.TotalCredit.ToString("N2")
                                                 </span>
                                             </span>
-                                        </summary>
-                                        <div class="issue-mini-table-wrap">
-                                            <table class="issue-mini-table">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Échéance</th>
-                                                        <th>Pièce</th>
-                                                        <th class="num">Débit</th>
-                                                        <th class="num">Crédit</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    @foreach (var ec in bloc.Ecritures)
-                                                    {
-                                                        <tr>
-                                                            <td>
-                                                                @if (ec.DateEcheance.HasValue)
-                                                                {
-                                                                    <span>@ec.DateEcheance.Value.ToString("dd/MM/yy")</span>
-                                                                }
-                                                                else { <span class="text-muted">-</span>; }
-                                                            </td>
-                                                            <td class="issue-mini-piece" title="@ec.Libelle">@(ec.NumeroPiece ?? "-")</td>
-                                                            <td class="num">@ec.Debit.ToString("N2")</td>
-                                                            <td class="num">@ec.Credit.ToString("N2")</td>
-                                                        </tr>
-                                                    }
-                                                </tbody>
-                                            </table>
                                         </div>
-                                    </details>
+                                        <div class="issue-client-bloc-actions">
+                                            <span class="issue-client-lines">@bloc.Ecritures.Count ligne(s)</span>
+                                            <button type="button"
+                                                    class="issue-btn issue-btn-primary issue-detail-btn"
+                                                    data-detail-id="@detailId"
+                                                    data-title="@modalTitle"
+                                                    onclick="ouvrirIssueModalFromButton(this)">
+                                                <i class="bi bi-eye"></i> Voir détail
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div id="@detailId" class="issue-hidden-detail" style="display:none;">
+                                        <table class="issue-modal-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Échéance</th>
+                                                    <th>Pièce</th>
+                                                    <th>Numéro facture</th>
+                                                    <th>Libellé</th>
+                                                    <th class="num">Débit</th>
+                                                    <th class="num">Crédit</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var ec in bloc.Ecritures)
+                                                {
+                                                    <tr>
+                                                        <td>
+                                                            @(ec.DateEcheance.HasValue ? ec.DateEcheance.Value.ToString("dd/MM/yyyy") : "-")
+                                                        </td>
+                                                        <td>@(ec.NumeroPiece ?? "-")</td>
+                                                        <td>@(string.IsNullOrWhiteSpace(ec.NumeroFacture) ? "-" : ec.NumeroFacture)</td>
+                                                        <td title="@ec.Libelle">@(ec.Libelle ?? "-")</td>
+                                                        <td class="num">@ec.Debit.ToString("N2")</td>
+                                                        <td class="num">@ec.Credit.ToString("N2")</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 }
                             }
                         </div>
@@ -195,7 +212,46 @@
     }
 </div>
 
+<div id="issueDetailModal" class="issue-modal-overlay" aria-hidden="true">
+    <div class="issue-modal-content">
+        <div class="issue-modal-header">
+            <h3 id="issueModalTitle">Détail</h3>
+            <button type="button" class="issue-modal-close" onclick="fermerIssueModal()">&times;</button>
+        </div>
+        <div id="issueModalBody" class="issue-modal-body"></div>
+    </div>
+</div>
+
 <script>
+    function ouvrirIssueModalFromButton(button) {
+        if (!button) return;
+        const detailId = button.dataset.detailId;
+        const title = button.dataset.title || 'Détail';
+        ouvrirIssueModal(detailId, title);
+    }
+
+    function ouvrirIssueModal(detailId, title) {
+        const src = document.getElementById(detailId);
+        const modal = document.getElementById('issueDetailModal');
+        const body = document.getElementById('issueModalBody');
+        const modalTitle = document.getElementById('issueModalTitle');
+        if (!src || !modal || !body || !modalTitle) return;
+
+        modalTitle.textContent = title;
+        body.innerHTML = src.innerHTML;
+        modal.classList.add('open');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function fermerIssueModal() {
+        const modal = document.getElementById('issueDetailModal');
+        if (!modal) return;
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         const wrapper = document.getElementById('issueClientSelectWrapper');
         const searchInput = document.getElementById('issueClientSearchInput');
@@ -276,6 +332,17 @@
         document.addEventListener('click', function (e) {
             if (!wrapper.contains(e.target)) {
                 wrapper.classList.remove('open');
+            }
+
+            const modal = document.getElementById('issueDetailModal');
+            if (modal && e.target === modal) {
+                fermerIssueModal();
+            }
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                fermerIssueModal();
             }
         });
     });
