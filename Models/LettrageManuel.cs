@@ -14,6 +14,10 @@ namespace dadaApp.Models
         
         public DateTime DateCreation { get; set; }
         
+        public int OwnerUserId { get; set; }
+
+        public User? OwnerUser { get; set; }
+
         [Required]
         [MaxLength(100)]
         public string CodeClient { get; set; } = string.Empty;

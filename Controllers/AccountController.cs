@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using dadaApp.Models;
-using dadaApp.Data; // <== important
+using dadaApp.Data;
+using dadaApp.Services;
 using System.Linq;
 
 public class AccountController : Controller
@@ -44,11 +45,18 @@ public class AccountController : Controller
 
         if (user != null)
         {
-            // connexion réussie
+            HttpContext.Session.SetInt32(CurrentUserContext.SessionUserIdKey, user.Id);
             return RedirectToAction("Index", "Home");
         }
 
         ModelState.AddModelError("", "Identifiant ou mot de passe incorrect");
         return View(model);
+    }
+
+    [HttpGet]
+    public IActionResult Logout()
+    {
+        HttpContext.Session.Clear();
+        return RedirectToAction(nameof(Login));
     }
 }

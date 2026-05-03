@@ -9,15 +9,25 @@ namespace dadaApp.Services
     public class GrandLivreService
     {
         private readonly AppDbContext _context;
+        private readonly ICurrentUserContext _current;
 
-        public GrandLivreService(AppDbContext context)
+        public GrandLivreService(AppDbContext context, ICurrentUserContext current)
         {
             _context = context;
+            _current = current;
         }
+
+        private int CurrentUserId => _current.GetRequiredUserId();
+
+        private IQueryable<Ecriture> EcrituresUtilisateur() =>
+            _context.Ecritures.Where(e => e.Compte != null && e.Compte.OwnerUserId == CurrentUserId);
+
+        private IQueryable<LettrageManuel> LettragesUtilisateur() =>
+            _context.LettragesManuels.Where(l => l.OwnerUserId == CurrentUserId);
 
         public async Task<List<Ecriture>> GetEcrituresAvecCompteAsync()
         {
-            return await _context.Ecritures
+            return await EcrituresUtilisateur()
                 .Include(e => e.Compte)
                 .OrderBy(e => e.DateComptable)
                 .ToListAsync();
@@ -26,7 +36,7 @@ namespace dadaApp.Services
         public async Task<(bool success, string message, string? numeroLettrage)> CreerLettrageManuelAsync(
             List<int> ecritureIds)
         {
-            var ecritures = await _context.Ecritures
+            var ecritures = await EcrituresUtilisateur()
                 .Include(e => e.Compte)
                 .Where(e => ecritureIds.Contains(e.EcritureId))
                 .ToListAsync();
@@ -34,6 +44,10 @@ namespace dadaApp.Services
             // Validation 1: Au moins 2 écritures
             if (ecritures.Count < 2)
                 return (false, "Vous devez sélectionner au moins 2 écritures", null);
+
+            var uid = CurrentUserId;
+            if (ecritures.Any(e => e.Compte == null || e.Compte.OwnerUserId != uid))
+                return (false, "Accès refusé ou écritures invalides.", null);
 
             // Validation 2: Toutes les écritures doivent être du même client
             var clients = ecritures.Select(e => e.Compte?.CodeClient).Distinct().ToList();
@@ -71,7 +85,7 @@ namespace dadaApp.Services
 
             // Même groupe déjà en historique (ex. réimport + nouveau lettrage) → une seule ligne, pas de doublon ni « fantôme »
             var candidatsMemeGroupe = new List<LettrageManuel>();
-            var historiquesClient = await _context.LettragesManuels
+            var historiquesClient = await LettragesUtilisateur()
                 .Where(l => l.CodeClient == codeClient)
                 .ToListAsync();
 
@@ -108,7 +122,7 @@ namespace dadaApp.Services
             }
             else
             {
-                var dernierLettrage = await _context.LettragesManuels
+                var dernierLettrage = await LettragesUtilisateur()
                     .AsNoTracking()
                     .Where(l => l.NumeroLettrage.StartsWith("LM"))
                     .OrderByDescending(l => l.NumeroLettrage)
@@ -136,6 +150,7 @@ namespace dadaApp.Services
                 {
                     NumeroLettrage = numeroLettrage,
                     DateCreation = DateTime.UtcNow,
+                    OwnerUserId = uid,
                     CodeClient = codeClient,
                     NomClient = nomClient,
                     TotalDebit = totalDebit,
@@ -160,14 +175,14 @@ namespace dadaApp.Services
 
         public async Task<(bool success, string message)> SupprimerLettrageManuelAsync(string numeroLettrage)
         {
-            var lettrage = await _context.LettragesManuels
+            var lettrage = await LettragesUtilisateur()
                 .FirstOrDefaultAsync(l => l.NumeroLettrage == numeroLettrage);
 
             if (lettrage == null)
                 return (false, "Lettrage non trouvé");
 
             // Délettrer les écritures existantes
-            var ecritures = await _context.Ecritures
+            var ecritures = await EcrituresUtilisateur()
                 .Where(e => e.NumeroLettrage == numeroLettrage)
                 .ToListAsync();
 
@@ -187,7 +202,7 @@ namespace dadaApp.Services
 
         public async Task<(bool success, string message)> SupprimerTousLesLettragesAsync()
         {
-            var ecritures = await _context.Ecritures
+            var ecritures = await EcrituresUtilisateur()
                 .Where(e => !string.IsNullOrWhiteSpace(e.NumeroLettrage))
                 .ToListAsync();
 
@@ -196,7 +211,7 @@ namespace dadaApp.Services
                 ecriture.NumeroLettrage = null;
             }
 
-            _context.LettragesManuels.RemoveRange(_context.LettragesManuels);
+            _context.LettragesManuels.RemoveRange(LettragesUtilisateur());
 
             await _context.SaveChangesAsync();
             return (true, "Tous les lettrages ont été supprimés");
@@ -204,7 +219,7 @@ namespace dadaApp.Services
 
         public async Task<List<LettrageManuel>> GetLettrageManuelsAsync()
         {
-            return await _context.LettragesManuels
+            return await LettragesUtilisateur()
                 .OrderByDescending(l => l.DateCreation)
                 .ToListAsync();
         }
@@ -322,13 +337,16 @@ namespace dadaApp.Services
             if (details == null || details.Count == 0)
                 return false;
 
-            var nb = await _context.Ecritures.CountAsync(e => e.NumeroLettrage == lm.NumeroLettrage);
+            var nb = await _context.Ecritures.CountAsync(e =>
+                e.NumeroLettrage == lm.NumeroLettrage &&
+                e.Compte != null &&
+                e.Compte.OwnerUserId == lm.OwnerUserId);
             return nb == details.Count;
         }
 
         public async Task<List<LettrageHistoriqueViewModel>> GetLettragesPourHistoriqueAsync()
         {
-            var liste = await _context.LettragesManuels
+            var liste = await LettragesUtilisateur()
                 .OrderByDescending(l => l.DateCreation)
                 .ToListAsync();
 
@@ -352,7 +370,7 @@ namespace dadaApp.Services
 
         public async Task<(bool success, string message)> RestaurerLettrageDepuisHistoriqueAsync(string numeroLettrage)
         {
-            var lm = await _context.LettragesManuels
+            var lm = await LettragesUtilisateur()
                 .FirstOrDefaultAsync(l => l.NumeroLettrage == numeroLettrage);
 
             if (lm == null)
@@ -365,7 +383,7 @@ namespace dadaApp.Services
             if (await LettrageEntierementAppliqueAsync(lm))
                 return (true, $"Le lettrage {numeroLettrage} est déjà appliqué sur les écritures.");
 
-            var ecritures = await _context.Ecritures
+            var ecritures = await EcrituresUtilisateur()
                 .Include(e => e.Compte)
                 .Where(e => e.Compte != null && e.Compte.CodeClient == lm.CodeClient)
                 .ToListAsync();
@@ -377,7 +395,7 @@ namespace dadaApp.Services
             if (ids.Count != details.Count)
                 return (false, $"Correspondance incomplète ({ids.Count}/{details.Count}).");
 
-            var aMettreAJour = await _context.Ecritures
+            var aMettreAJour = await EcrituresUtilisateur()
                 .Where(e => ids.Contains(e.EcritureId))
                 .ToListAsync();
 
@@ -405,7 +423,7 @@ namespace dadaApp.Services
 
         public async Task<(bool success, string message, int reussites, int ignores, int echecs)> RestaurerTousLettragesDepuisHistoriqueAsync()
         {
-            var tous = await _context.LettragesManuels
+            var tous = await LettragesUtilisateur()
                 .OrderBy(l => l.DateCreation)
                 .ToListAsync();
 
@@ -473,7 +491,7 @@ namespace dadaApp.Services
             }
 
             // Écritures NON lettrées avec une date d'échéance définie dans l'intervalle demandé
-            var query = _context.Ecritures
+            var query = EcrituresUtilisateur()
                 .AsNoTracking()
                 .Include(e => e.Compte)
                 .Where(e =>
@@ -549,7 +567,7 @@ namespace dadaApp.Services
             var lundiSemaineMoins2 = lundiReference.AddDays(-14);
             var dateMax = lundiReference.AddDays(14 + 6);
 
-            var query = _context.Ecritures
+            var query = EcrituresUtilisateur()
                 .AsNoTracking()
                 .Include(e => e.Compte)
                 .Where(e =>
@@ -655,7 +673,7 @@ namespace dadaApp.Services
         {
             return await _context.Comptes
                 .AsNoTracking()
-                .Where(c => !string.IsNullOrWhiteSpace(c.NomClient))
+                .Where(c => c.OwnerUserId == CurrentUserId && !string.IsNullOrWhiteSpace(c.NomClient))
                 .Select(c => c.NomClient!)
                 .Distinct()
                 .OrderBy(n => n)
@@ -676,7 +694,7 @@ namespace dadaApp.Services
             // Récupérer toutes les écritures non lettrées avec leur compte
             // Utiliser AsNoTracking() dès le début pour éviter tout cache
             Console.WriteLine("🔍 [C#] Récupération des écritures non lettrées (sans cache)...");
-            var query = _context.Ecritures
+            var query = EcrituresUtilisateur()
                 .AsNoTracking() // IMPORTANT : pas de tracking pour éviter le cache
                 .Include(e => e.Compte)
                 .Where(e => string.IsNullOrWhiteSpace(e.NumeroLettrage) && 
@@ -714,7 +732,7 @@ namespace dadaApp.Services
             var idsEcritures = ecrituresNonLettre.Select(e => e.EcritureId).ToList();
             
             // Requête fraîche pour vérifier l'état réel en base
-            var ecrituresVraimentNonLettre = await _context.Ecritures
+            var ecrituresVraimentNonLettre = await EcrituresUtilisateur()
                 .AsNoTracking()
                 .Where(e => idsEcritures.Contains(e.EcritureId) && string.IsNullOrWhiteSpace(e.NumeroLettrage))
                 .Include(e => e.Compte)
@@ -766,7 +784,7 @@ namespace dadaApp.Services
                 {
                     // Vérification supplémentaire : s'assurer que toutes les écritures de la combinaison sont toujours non lettrées
                     var idsCombinaison = combinaison.Select(e => e.EcritureId).ToList();
-                    var ecrituresCombinaison = await _context.Ecritures
+                    var ecrituresCombinaison = await EcrituresUtilisateur()
                         .AsNoTracking()
                         .Where(e => idsCombinaison.Contains(e.EcritureId))
                         .Select(e => new { e.EcritureId, e.NumeroLettrage })

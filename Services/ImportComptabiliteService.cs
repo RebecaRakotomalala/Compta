@@ -13,6 +13,7 @@ namespace dadaApp.Services
     {
         private readonly AppDbContext _context;
         private readonly ILogger<ImportComptabiliteService> _logger;
+        private readonly ICurrentUserContext _current;
 
         // ─── Positions des colonnes (1-based, longueur fixe) ───────────────────
         // Format du grand-livre auxiliaire TXT :
@@ -69,10 +70,12 @@ namespace dadaApp.Services
 
         public ImportComptabiliteService(
             AppDbContext context,
-            ILogger<ImportComptabiliteService> logger)
+            ILogger<ImportComptabiliteService> logger,
+            ICurrentUserContext current)
         {
             _context = context;
             _logger  = logger;
+            _current = current;
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -140,6 +143,8 @@ namespace dadaApp.Services
 
             try
             {
+                var ownerUserId = _current.GetRequiredUserId();
+
                 // Le fichier utilise l'encodage ISO-8859-1 (Latin-1)
                 using var reader = new StreamReader(fileStream, Encoding.GetEncoding("ISO-8859-1"));
 
@@ -186,7 +191,8 @@ namespace dadaApp.Services
                                 ligne,
                                 compteActuel,
                                 codeClientActuel,
-                                nomClientActuel);
+                                nomClientActuel,
+                                ownerUserId);
 
                             resultat.NombreLignesImportees++;
 
@@ -312,7 +318,8 @@ namespace dadaApp.Services
             string  ligne,
             string? numeroCompte,
             string? codeClient,
-            string? nomClient)
+            string? nomClient,
+            int ownerUserId)
         {
             if (string.IsNullOrWhiteSpace(numeroCompte))
                 throw new InvalidOperationException("Numéro de compte manquant.");
@@ -495,6 +502,7 @@ namespace dadaApp.Services
                 .Entries<Compte>()
                 .Select(e => e.Entity)
                 .FirstOrDefault(c =>
+                    c.OwnerUserId == ownerUserId &&
                     c.NumeroCompte == numeroCompte &&
                     c.CodeClient   == codeClient);
 
@@ -502,6 +510,7 @@ namespace dadaApp.Services
             {
                 compte = await _context.Comptes
                     .FirstOrDefaultAsync(c =>
+                        c.OwnerUserId == ownerUserId &&
                         c.NumeroCompte == numeroCompte &&
                         c.CodeClient   == codeClient);
             }
@@ -514,6 +523,7 @@ namespace dadaApp.Services
                     CodeClient   = codeClient,
                     NomClient    = nomClient ?? codeClient ?? numeroCompte,
                     DateCreation = DateTime.UtcNow,
+                    OwnerUserId  = ownerUserId,
                     Ecritures    = new List<Ecriture>()
                 };
                 _context.Comptes.Add(compte);

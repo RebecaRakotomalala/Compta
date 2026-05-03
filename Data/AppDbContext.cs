@@ -31,8 +31,13 @@ namespace dadaApp.Data
                 entity.ToTable("Comptes");
                 
                 entity.HasKey(e => e.CompteId);
+
+                entity.HasOne(e => e.OwnerUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.OwnerUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
                 
-                entity.HasIndex(e => new { e.NumeroCompte, e.CodeClient })
+                entity.HasIndex(e => new { e.OwnerUserId, e.NumeroCompte, e.CodeClient })
                     .IsUnique();
                 
                 entity.HasMany(e => e.Ecritures)
@@ -51,6 +56,16 @@ namespace dadaApp.Data
                 entity.HasOne(e => e.Compte)
                     .WithMany(c => c.Ecritures)
                     .HasForeignKey(e => e.CompteId);
+            });
+
+            modelBuilder.Entity<LettrageManuel>(entity =>
+            {
+                entity.ToTable("LettragesManuels");
+
+                entity.HasOne(e => e.OwnerUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.OwnerUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
             // Configuration Vue (lecture seule)

@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 using dadaApp.Data;
+using dadaApp.Filters;
 using dadaApp.Models;
 using dadaApp.Services;
 
@@ -9,7 +11,19 @@ AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services
-builder.Services.AddControllersWithViews();
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddSession(options =>
+{
+    options.Cookie.IsEssential = true;
+    options.IdleTimeout = TimeSpan.FromHours(12);
+});
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
+builder.Services.AddScoped<RequireLoginFilter>();
+builder.Services.AddControllersWithViews(options =>
+{
+    options.Filters.AddService<RequireLoginFilter>();
+});
 
 // Enregistrer le service AVANT DbContext
 builder.Services.AddScoped<ImportComptabiliteService>();
@@ -152,6 +166,10 @@ Console.WriteLine($"Database connection string detected: {connInfo}");
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
     options.UseNpgsql(connString);
+    // EF 9 : évite l’exception au Migrate() quand le snapshot a été généré avec une autre version d’outils
+    // (schéma réel inchangé — pas de migration « fantôme » timestamp without time zone).
+    options.ConfigureWarnings(w =>
+        w.Ignore(RelationalEventId.PendingModelChangesWarning));
 });
 
 var app = builder.Build();
@@ -260,6 +278,25 @@ using (var scope = app.Services.CreateScope())
     {
         Console.WriteLine("Warning: could not create default login user: " + ex.Message);
     }
+
+    try
+    {
+        var secondUsername = Environment.GetEnvironmentVariable("SECOND_LOGIN_USERNAME");
+        var secondPassword = Environment.GetEnvironmentVariable("SECOND_LOGIN_PASSWORD");
+        if (!string.IsNullOrWhiteSpace(secondUsername) && !string.IsNullOrWhiteSpace(secondPassword))
+        {
+            if (!db.Users.Any(u => u.Username == secondUsername))
+            {
+                db.Users.Add(new User { Username = secondUsername, Password = secondPassword });
+                db.SaveChanges();
+                Console.WriteLine($"Second login user created: {secondUsername}");
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("Warning: could not create second login user: " + ex.Message);
+    }
 }
 
 // In production (Render, Railway, etc.), the PORT environment variable is provided.
@@ -290,6 +327,7 @@ if (!app.Environment.IsDevelopment())
 
 app.UseStaticFiles();
 app.UseRouting();
+app.UseSession();
 app.UseAuthorization();
 
 app.MapControllerRoute(

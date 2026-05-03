@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using dadaApp.Models;
 using dadaApp.Services;
-using dadaApp.Data;
 using Microsoft.EntityFrameworkCore;
+using dadaApp.Data;
 
 namespace dadaApp.Controllers;
 
@@ -11,16 +11,21 @@ public class ImportController : Controller
     private readonly ILogger<ImportController> _logger;
     private readonly ImportComptabiliteService _importService;
     private readonly AppDbContext _context;
+    private readonly ICurrentUserContext _currentUser;
 
     public ImportController(
         ILogger<ImportController> logger,
         ImportComptabiliteService importService,
-        AppDbContext context)
+        AppDbContext context,
+        ICurrentUserContext currentUser)
     {
         _logger = logger;
         _importService = importService;
         _context = context;
+        _currentUser = currentUser;
     }
+
+    private int OwnerId => _currentUser.GetRequiredUserId();
 
     public IActionResult Index()
     {
@@ -101,8 +106,10 @@ public class ImportController : Controller
             }
 
             vm.NombreLignesImportees = totalLinesImported;
-            vm.NombreComptes = await _context.Comptes.CountAsync();
-            vm.NombreEcritures = await _context.Ecritures.CountAsync();
+            var oid = OwnerId;
+            vm.NombreComptes = await _context.Comptes.CountAsync(c => c.OwnerUserId == oid);
+            vm.NombreEcritures = await _context.Ecritures.CountAsync(e =>
+                e.Compte != null && e.Compte.OwnerUserId == oid);
             vm.Erreurs = totalErrors;
 
             return View("Index", vm);
@@ -117,6 +124,7 @@ public class ImportController : Controller
     public async Task<IActionResult> Comptes()
     {
         var comptes = await _context.Comptes
+            .Where(c => c.OwnerUserId == OwnerId)
             .Include(c => c.Ecritures)
             .OrderBy(c => c.NumeroCompte)
             .ToListAsync();
@@ -125,7 +133,14 @@ public class ImportController : Controller
 
     public async Task<IActionResult> Soldes()
     {
+        var ids = await _context.Comptes
+            .AsNoTracking()
+            .Where(c => c.OwnerUserId == OwnerId)
+            .Select(c => c.CompteId)
+            .ToListAsync();
+
         var soldes = await _context.VueSoldesComptes
+            .Where(s => ids.Contains(s.CompteId))
             .OrderBy(s => s.NumeroCompte)
             .ToListAsync();
         return View(soldes);
@@ -133,10 +148,13 @@ public class ImportController : Controller
 
     public async Task<IActionResult> Ecritures(int? compteId, DateTime? dateDebut, DateTime? dateFin)
     {
-        var query = _context.Ecritures.Include(e => e.Compte).AsQueryable();
+        var oid = OwnerId;
+        var query = _context.Ecritures
+            .Include(e => e.Compte)
+            .Where(e => e.Compte != null && e.Compte.OwnerUserId == oid);
 
         if (compteId.HasValue)
-            query = query.Where(e => e.CompteId == compteId.Value);
+            query = query.Where(e => e.CompteId == compteId.Value && e.Compte!.OwnerUserId == oid);
         if (dateDebut.HasValue)
             query = query.Where(e => e.DateComptable >= dateDebut.Value);
         if (dateFin.HasValue)
@@ -147,7 +165,10 @@ public class ImportController : Controller
             .Take(100)
             .ToListAsync();
 
-        ViewBag.Comptes = await _context.Comptes.OrderBy(c => c.NomClient).ToListAsync();
+        ViewBag.Comptes = await _context.Comptes
+            .Where(c => c.OwnerUserId == oid)
+            .OrderBy(c => c.NomClient)
+            .ToListAsync();
         return View(ecritures);
     }
 
@@ -156,9 +177,13 @@ public class ImportController : Controller
     {
         try
         {
-            await _context.Database.ExecuteSqlRawAsync("TRUNCATE TABLE \"Ecritures\" CASCADE");
-            await _context.Database.ExecuteSqlRawAsync("TRUNCATE TABLE \"Comptes\" CASCADE");
-            TempData["Success"] = "Données supprimées";
+            var oid = OwnerId;
+            await _context.Ecritures
+                .Where(e => e.Compte != null && e.Compte.OwnerUserId == oid)
+                .ExecuteDeleteAsync();
+            await _context.Comptes.Where(c => c.OwnerUserId == oid).ExecuteDeleteAsync();
+            await _context.LettragesManuels.Where(l => l.OwnerUserId == oid).ExecuteDeleteAsync();
+            TempData["Success"] = "Vos comptes et écritures ont été supprimés.";
         }
         catch (Exception ex)
         {

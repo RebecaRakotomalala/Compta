@@ -29,6 +29,11 @@ namespace dadaApp.Models
         [Column("date_creation")]
         public DateTime DateCreation { get; set; }
 
+        [Column("owner_user_id")]
+        public int OwnerUserId { get; set; }
+
+        public User? OwnerUser { get; set; }
+
         public ICollection<Ecriture> Ecritures { get; set; } = new List<Ecriture>();
     }
 }
