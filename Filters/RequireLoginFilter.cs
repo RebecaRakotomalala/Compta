@@ -14,7 +14,8 @@ public sealed class RequireLoginFilter : IAsyncActionFilter
         var action = context.RouteData.Values["action"]?.ToString();
 
         if (string.Equals(controller, "Account", StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(action, "Login", StringComparison.OrdinalIgnoreCase))
+            (string.Equals(action, "Login", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(action, "Register", StringComparison.OrdinalIgnoreCase)))
             return next();
 
         if (string.Equals(controller, "Home", StringComparison.OrdinalIgnoreCase) &&

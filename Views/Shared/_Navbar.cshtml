@@ -81,6 +81,12 @@
 
         <!-- User menu -->
         <div class="nav-user">
+            <a asp-controller="Account" asp-action="Profil" class="nav-item @(currentAction == "Profil" ? "active" : "")" title="Mon profil">
+                <div class="nav-icon">
+                    <i class="bi bi-person-gear"></i>
+                </div>
+                <span class="nav-label">Profil</span>
+            </a>
             <a asp-controller="Account" asp-action="Logout" class="nav-item" title="Déconnexion">
                 <div class="nav-icon">
                     <i class="bi bi-box-arrow-right"></i>
@@ -135,6 +141,10 @@
                class="mobile-item @(currentController == "Issue" ? "active" : "")">
                 <i class="bi bi-flag"></i>
                 <span>Issue</span>
+            </a>
+            <a asp-controller="Account" asp-action="Profil" class="mobile-item @(currentAction == "Profil" ? "active" : "")">
+                <i class="bi bi-person-gear"></i>
+                <span>Profil</span>
             </a>
             <a asp-controller="Account" asp-action="Logout" class="mobile-item">
                 <i class="bi bi-box-arrow-right"></i>

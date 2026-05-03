@@ -36,6 +36,10 @@
             </div>
             
             <div class="card-body">
+                @if (TempData["RegisterSuccess"] is string regOk && !string.IsNullOrEmpty(regOk))
+                {
+                    <div class="alert alert-success py-2 small mb-3" role="alert">@regOk</div>
+                }
                 <form asp-action="Login" method="post">
                     @Html.ValidationSummary(true, "", new { @class = "validation-summary-errors" })
                     
@@ -91,8 +95,8 @@
                         <span>Se connecter</span>
                     </button>
 
-                    <div class="register-link">
-                        Aucun module d'inscription n'est activé.
+                    <div class="register-link text-center">
+                        <a asp-action="Register">Créer un compte</a>
                     </div>
                 </form>
             </div>

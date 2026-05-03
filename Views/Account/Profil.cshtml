@@ -1,0 +1,77 @@
+@model ProfileViewModel
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8" />
+    <title>Mon profil | ComptaPro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="~/css/login.css" />
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card" style="max-width: 440px;">
+            <div class="card-header">
+                <div class="logo"><i class="fas fa-id-card"></i></div>
+                <h1>Données personnelles</h1>
+                <p>Identifiant et mot de passe</p>
+            </div>
+            <div class="card-body">
+                @if (TempData["ProfilSuccess"] is string ok && !string.IsNullOrEmpty(ok))
+                {
+                    <div class="alert alert-success py-2 small" role="alert">@ok</div>
+                }
+                <form asp-action="Profil" method="post">
+                    @Html.ValidationSummary(true, "", new { @class = "validation-summary-errors" })
+                    <div class="form-group">
+                        <label class="form-label" asp-for="Username"><i class="fas fa-user"></i> Identifiant</label>
+                        <div class="input-wrapper">
+                            <i class="fas fa-user input-icon"></i>
+                            <input asp-for="Username" class="form-control" autocomplete="username" />
+                        </div>
+                        <span asp-validation-for="Username" class="text-danger small"></span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" asp-for="CurrentPassword"><i class="fas fa-lock"></i> Mot de passe actuel</label>
+                        <div class="input-wrapper">
+                            <i class="fas fa-lock input-icon"></i>
+                            <input asp-for="CurrentPassword" type="password" class="form-control" autocomplete="current-password" />
+                        </div>
+                        <span asp-validation-for="CurrentPassword" class="text-danger small"></span>
+                    </div>
+                    <hr class="my-3 opacity-25" />
+                    <p class="small text-muted mb-2">Changer le mot de passe (facultatif)</p>
+                    <div class="form-group">
+                        <label class="form-label" asp-for="NewPassword"><i class="fas fa-key"></i> Nouveau mot de passe</label>
+                        <div class="input-wrapper">
+                            <i class="fas fa-key input-icon"></i>
+                            <input asp-for="NewPassword" type="password" class="form-control" autocomplete="new-password" />
+                        </div>
+                        <span asp-validation-for="NewPassword" class="text-danger small"></span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" asp-for="ConfirmNewPassword"><i class="fas fa-key"></i> Confirmer</label>
+                        <div class="input-wrapper">
+                            <i class="fas fa-key input-icon"></i>
+                            <input asp-for="ConfirmNewPassword" type="password" class="form-control" autocomplete="new-password" />
+                        </div>
+                        <span asp-validation-for="ConfirmNewPassword" class="text-danger small"></span>
+                    </div>
+                    <button type="submit" class="btn-login"><i class="fas fa-save"></i><span>Enregistrer</span></button>
+                    <div class="register-link text-center mt-3">
+                        <a asp-controller="Home" asp-action="Index">Retour à l’accueil</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <partial name="_ValidationScriptsPartial" />
+</body>
+</html>
