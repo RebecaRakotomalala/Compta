@@ -25,5 +25,17 @@ public class IssueController : Controller
 
         return View(dashboard);
     }
+
+    [HttpGet]
+    public async Task<IActionResult> Tableau(string? client)
+    {
+        var dashboard = await _grandLivreService.GetIssueDashboardParSemainesAsync(client);
+        var allClientNames = await _grandLivreService.GetAllClientNamesAsync();
+
+        ViewBag.ClientFilter = client ?? string.Empty;
+        ViewBag.AllClientNames = allClientNames;
+
+        return View(dashboard);
+    }
 }
 

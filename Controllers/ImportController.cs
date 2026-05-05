@@ -182,8 +182,7 @@ public class ImportController : Controller
                 .Where(e => e.Compte != null && e.Compte.OwnerUserId == oid)
                 .ExecuteDeleteAsync();
             await _context.Comptes.Where(c => c.OwnerUserId == oid).ExecuteDeleteAsync();
-            await _context.LettragesManuels.Where(l => l.OwnerUserId == oid).ExecuteDeleteAsync();
-            TempData["Success"] = "Vos comptes et écritures ont été supprimés.";
+            TempData["Success"] = "Vos comptes et écritures ont été supprimés. L'historique des lettrages manuels est conservé.";
         }
         catch (Exception ex)
         {

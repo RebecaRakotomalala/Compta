@@ -490,14 +490,14 @@ namespace dadaApp.Services
                 Console.WriteLine($"🔍 [C#] Issue: date de début prise en compte: {startDate.Value:yyyy-MM-dd}");
             }
 
-            // Écritures NON lettrées avec une date d'échéance définie dans l'intervalle demandé
+            // Écritures NON lettrées avec la date de référence Issue définie dans l'intervalle demandé
             var query = EcrituresUtilisateur()
                 .AsNoTracking()
                 .Include(e => e.Compte)
                 .Where(e =>
                     string.IsNullOrWhiteSpace(e.NumeroLettrage) &&
-                    e.DateEcheance.HasValue &&
-                    e.DateEcheance.Value <= effectiveEnd &&
+                    (e.Credit > 0m && e.Debit <= 0m ? e.DateFacture : e.DateEcheance).HasValue &&
+                    (e.Credit > 0m && e.Debit <= 0m ? e.DateFacture : e.DateEcheance)!.Value <= effectiveEnd &&
                     e.Compte != null &&
                     !string.IsNullOrWhiteSpace(e.Compte.CodeClient));
 
@@ -515,7 +515,8 @@ namespace dadaApp.Services
             if (startDate.HasValue)
             {
                 var start = startDate.Value.Date;
-                query = query.Where(e => e.DateEcheance!.Value.Date >= start);
+                query = query.Where(e =>
+                    (e.Credit > 0m && e.Debit <= 0m ? e.DateFacture : e.DateEcheance)!.Value.Date >= start);
             }
 
             var ecritures = await query.ToListAsync();
@@ -524,7 +525,7 @@ namespace dadaApp.Services
 
             var result = ecritures
                 .OrderBy(e => e.Compte!.NomClient)
-                .ThenBy(e => e.DateEcheance)
+                .ThenBy(GetDateReferenceIssue)
                 .Select(e => new IssueClientViewModel
                 {
                     CodeClient    = e.Compte!.CodeClient,
@@ -532,6 +533,7 @@ namespace dadaApp.Services
                     EcritureId    = e.EcritureId,
                     DateComptable = e.DateComptable,
                     DateEcheance  = e.DateEcheance,
+                    DateFacture   = e.DateFacture,
                     NumeroPiece   = e.NumeroPiece,
                     NumeroFacture = e.Reference,
                     Libelle       = e.Libelle,
@@ -556,6 +558,18 @@ namespace dadaApp.Services
         }
 
         /// <summary>
+        /// Règle de date Issue:
+        /// - crédit sans débit => DateFacture (fallback DateEcheance)
+        /// - sinon => DateEcheance
+        /// </summary>
+        private static DateTime? GetDateReferenceIssue(Ecriture e)
+        {
+            if (e.Credit > 0m && e.Debit <= 0m)
+                return e.DateFacture ?? e.DateEcheance;
+            return e.DateEcheance;
+        }
+
+        /// <summary>
         /// Issue par colonnes : "S-2 et avant", S-1, semaine courante, S+1, S+2
         /// (selon la date d’échéance).
         /// </summary>
@@ -572,10 +586,10 @@ namespace dadaApp.Services
                 .Include(e => e.Compte)
                 .Where(e =>
                     string.IsNullOrWhiteSpace(e.NumeroLettrage) &&
-                    e.DateEcheance.HasValue &&
+                    (e.Credit > 0m && e.Debit <= 0m ? e.DateFacture : e.DateEcheance).HasValue &&
                     e.Compte != null &&
                     !string.IsNullOrWhiteSpace(e.Compte.CodeClient) &&
-                    e.DateEcheance!.Value.Date <= dateMax);
+                    (e.Credit > 0m && e.Debit <= 0m ? e.DateFacture : e.DateEcheance)!.Value.Date <= dateMax);
 
             if (!string.IsNullOrWhiteSpace(clientFilter))
             {
@@ -615,9 +629,13 @@ namespace dadaApp.Services
 
             var dictColonnes = colonnes.ToDictionary(c => c.LundiSemaine.Date);
 
-            foreach (var e in ecritures.OrderBy(x => x.Compte!.NomClient).ThenBy(x => x.DateEcheance))
+            foreach (var e in ecritures.OrderBy(x => x.Compte!.NomClient).ThenBy(GetDateReferenceIssue))
             {
-                var lundiEc = DebutSemaineLundi(e.DateEcheance!.Value);
+                var dateReference = GetDateReferenceIssue(e);
+                if (!dateReference.HasValue)
+                    continue;
+
+                var lundiEc = DebutSemaineLundi(dateReference.Value);
                 // Toute échéance antérieure à la semaine S-2 va dans la 1ère colonne (cumul "et avant").
                 if (lundiEc < lundiSemaineMoins2)
                     lundiEc = lundiSemaineMoins2;
@@ -632,6 +650,7 @@ namespace dadaApp.Services
                     EcritureId = e.EcritureId,
                     DateComptable = e.DateComptable,
                     DateEcheance = e.DateEcheance,
+                    DateFacture = e.DateFacture,
                     NumeroPiece = e.NumeroPiece,
                     NumeroFacture = e.Reference,
                     Libelle = e.Libelle,

@@ -1,0 +1,255 @@
+@model dadaApp.Models.IssueDashboardViewModel
+@using System.Text.Json
+@{
+    ViewData["Title"] = "Tableau Issue";
+    Layout = null;
+
+    var clientNames = ViewBag.AllClientNames as List<string> ?? new List<string>();
+    var selectedClient = ViewBag.ClientFilter as string ?? string.Empty;
+    var weeks = Model?.Semaines ?? new List<dadaApp.Models.IssueWeekColumnViewModel>();
+    var issueWeekIds = new HashSet<string>(new[] { "m2", "m1", "s0" });
+    var nonIssueWeekIds = new HashSet<string>(new[] { "p1", "p2" });
+
+    var clientRows = weeks
+        .SelectMany(w => w.Clients.Select(c => new
+        {
+            WeekId = w.Id,
+            WeekTitle = w.Titre,
+            ClientKey = $"{c.CodeClient}|{c.NomClient}",
+            c.CodeClient,
+            c.NomClient,
+            c.TotalDebit,
+            c.TotalCredit,
+            Entries = c.Ecritures
+        }))
+        .GroupBy(x => x.ClientKey)
+        .Select(g =>
+        {
+            var all = g.ToList();
+            var issue = all.Where(x => issueWeekIds.Contains(x.WeekId)).ToList();
+            var nonIssue = all.Where(x => nonIssueWeekIds.Contains(x.WeekId)).ToList();
+            return new
+            {
+                CodeClient = all.First().CodeClient,
+                NomClient = all.First().NomClient,
+                IssueTotal = issue.Sum(x => x.TotalDebit + x.TotalCredit),
+                NonIssueTotal = nonIssue.Sum(x => x.TotalDebit + x.TotalCredit),
+                RowTotal = issue.Sum(x => x.TotalDebit + x.TotalCredit) + nonIssue.Sum(x => x.TotalDebit + x.TotalCredit),
+                IssueDetails = issue.SelectMany(x => x.Entries.Select(e => new
+                {
+                    Week = x.WeekTitle,
+                    Echeance = e.DateEcheance?.ToString("dd/MM/yyyy") ?? "-",
+                    DateFacture = e.DateFacture?.ToString("dd/MM/yyyy") ?? "-",
+                    Piece = e.NumeroPiece ?? "-",
+                    Facture = string.IsNullOrWhiteSpace(e.NumeroFacture) ? "-" : e.NumeroFacture,
+                    Libelle = e.Libelle ?? "-",
+                    Debit = e.Debit,
+                    Credit = e.Credit
+                })).ToList(),
+                NonIssueDetails = nonIssue.SelectMany(x => x.Entries.Select(e => new
+                {
+                    Week = x.WeekTitle,
+                    Echeance = e.DateEcheance?.ToString("dd/MM/yyyy") ?? "-",
+                    DateFacture = e.DateFacture?.ToString("dd/MM/yyyy") ?? "-",
+                    Piece = e.NumeroPiece ?? "-",
+                    Facture = string.IsNullOrWhiteSpace(e.NumeroFacture) ? "-" : e.NumeroFacture,
+                    Libelle = e.Libelle ?? "-",
+                    Debit = e.Debit,
+                    Credit = e.Credit
+                })).ToList()
+            };
+        })
+        .OrderBy(x => x.NomClient)
+        .ToList();
+
+    var filteredRows = clientRows;
+    if (!string.IsNullOrWhiteSpace(selectedClient))
+    {
+        var term = selectedClient.Trim().ToLowerInvariant();
+        filteredRows = clientRows
+            .Where(x =>
+                (!string.IsNullOrWhiteSpace(x.NomClient) && x.NomClient.ToLowerInvariant().Contains(term)) ||
+                (!string.IsNullOrWhiteSpace(x.CodeClient) && x.CodeClient.ToLowerInvariant().Contains(term)))
+            .ToList();
+    }
+
+    var issueGrandTotal = filteredRows.Sum(x => x.IssueTotal);
+    var nonIssueGrandTotal = filteredRows.Sum(x => x.NonIssueTotal);
+    var fullGrandTotal = filteredRows.Sum(x => x.RowTotal);
+}
+
+@await Html.PartialAsync("_Navbar")
+<link rel="stylesheet" href="~/css/issue.css" />
+
+<div class="issue-container issue-container--wide">
+    <div class="issue-header">
+        <div class="issue-title-block">
+            <div class="issue-icon"><i class="bi bi-table"></i></div>
+            <div>
+                <h1 class="issue-title">Tableau Issue par client</h1>
+                <p class="issue-subtitle">1 ligne/client. Issue = S-2 et avant + S-1 + S0. Non issue = S+1 + S+2.</p>
+            </div>
+        </div>
+    </div>
+
+    <form asp-action="Tableau" method="get" class="issue-filters issue-filters--compact">
+        <div class="issue-filter-group issue-filter-group--grow">
+            <label class="form-label">Client</label>
+            <input type="text" name="client" class="form-control" value="@selectedClient" placeholder="Filtrer par nom client" />
+        </div>
+        <div class="issue-filters-actions">
+            <a asp-action="Tableau" class="issue-btn issue-btn-secondary"><i class="bi bi-x-circle"></i> Réinitialiser</a>
+            <button type="submit" class="issue-btn issue-btn-primary"><i class="bi bi-search"></i> Filtrer</button>
+        </div>
+    </form>
+
+    <div class="issue-results-card">
+        <div class="issue-grand-total" style="margin-bottom:12px;">
+            <span><i class="bi bi-table"></i> @filteredRows.Count client(s)</span>
+            <span class="issue-grand-total-nums">
+                Issue <strong>@issueGrandTotal.ToString("N2")</strong>
+                · Non issue <strong>@nonIssueGrandTotal.ToString("N2")</strong>
+                · Global <strong>@fullGrandTotal.ToString("N2")</strong>
+            </span>
+        </div>
+        <div style="overflow:auto;">
+            <table class="issue-table" style="width:100%; border-collapse: collapse;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">Client</th>
+                        <th style="text-align:right; padding:10px; border-bottom:1px solid #e5e7eb;">Total Issue</th>
+                        <th style="text-align:right; padding:10px; border-bottom:1px solid #e5e7eb;">Total Non Issue</th>
+                        <th style="text-align:right; padding:10px; border-bottom:1px solid #e5e7eb;">Total Ligne</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @if (!filteredRows.Any())
+                {
+                    <tr><td colspan="4" style="padding:14px;">Aucune donnée à afficher.</td></tr>
+                }
+                else
+                {
+                    @for (var i = 0; i < filteredRows.Count; i++)
+                    {
+                        var row = filteredRows[i];
+                        var issueJson = JsonSerializer.Serialize(row.IssueDetails);
+                        var nonIssueJson = JsonSerializer.Serialize(row.NonIssueDetails);
+                        <tr>
+                            <td style="padding:10px; border-bottom:1px solid #f1f5f9;">
+                                <button type="button"
+                                        class="issue-btn issue-btn-secondary"
+                                        data-title="@($"Issue - {row.NomClient}")"
+                                        data-items='@issueJson'
+                                        onclick="openIssueTableDetail(this)">
+                                    @row.NomClient
+                                </button>
+                            </td>
+                            <td style="padding:10px; text-align:right; border-bottom:1px solid #f1f5f9;">
+                                <button type="button"
+                                        class="issue-btn issue-btn-primary"
+                                        data-title="@($"Issue - {row.NomClient}")"
+                                        data-items='@issueJson'
+                                        onclick="openIssueTableDetail(this)">
+                                    @row.IssueTotal.ToString("N2")
+                                </button>
+                            </td>
+                            <td style="padding:10px; text-align:right; border-bottom:1px solid #f1f5f9;">
+                                <button type="button"
+                                        class="issue-btn issue-btn-secondary"
+                                        data-title="@($"Non issue - {row.NomClient}")"
+                                        data-items='@nonIssueJson'
+                                        onclick="openIssueTableDetail(this)">
+                                    @row.NonIssueTotal.ToString("N2")
+                                </button>
+                            </td>
+                            <td style="padding:10px; text-align:right; border-bottom:1px solid #f1f5f9; font-weight:700;">
+                                @row.RowTotal.ToString("N2")
+                            </td>
+                        </tr>
+                    }
+                }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <th style="text-align:left; padding:12px 10px; border-top:2px solid #dbe4ef;">TOTAL</th>
+                        <th style="text-align:right; padding:12px 10px; border-top:2px solid #dbe4ef;">@issueGrandTotal.ToString("N2")</th>
+                        <th style="text-align:right; padding:12px 10px; border-top:2px solid #dbe4ef;">@nonIssueGrandTotal.ToString("N2")</th>
+                        <th style="text-align:right; padding:12px 10px; border-top:2px solid #dbe4ef;">@fullGrandTotal.ToString("N2")</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="issueTableModal" class="issue-modal-overlay" aria-hidden="true">
+    <div class="issue-modal-content">
+        <div class="issue-modal-header">
+            <h3 id="issueTableModalTitle">Détail</h3>
+            <button type="button" class="issue-modal-close" onclick="closeIssueTableModal()">&times;</button>
+        </div>
+        <div id="issueTableModalBody" class="issue-modal-body"></div>
+    </div>
+</div>
+
+<script>
+function openIssueTableDetail(button) {
+    if (!button) return;
+    const title = button.dataset.title || "Détail";
+    const items = JSON.parse(button.dataset.items || "[]");
+
+    const modal = document.getElementById("issueTableModal");
+    const modalTitle = document.getElementById("issueTableModalTitle");
+    const body = document.getElementById("issueTableModalBody");
+    if (!modal || !modalTitle || !body) return;
+
+    modalTitle.textContent = title;
+    if (!items.length) {
+        body.innerHTML = "<p>Aucune ligne.</p>";
+    } else {
+        body.innerHTML = `
+            <table class="issue-modal-table">
+                <thead>
+                    <tr>
+                        <th>Semaine</th><th>Échéance</th><th>Date facture</th><th>Pièce</th><th>Facture</th><th>Libellé</th><th class="num">Débit</th><th class="num">Crédit</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${items.map(i => `
+                        <tr>
+                            <td>${i.Week ?? "-"}</td>
+                            <td>${i.Echeance ?? "-"}</td>
+                            <td>${i.DateFacture ?? "-"}</td>
+                            <td>${i.Piece ?? "-"}</td>
+                            <td>${i.Facture ?? "-"}</td>
+                            <td>${i.Libelle ?? "-"}</td>
+                            <td class="num">${Number(i.Debit || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td class="num">${Number(i.Credit || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>`;
+    }
+
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+}
+
+function closeIssueTableModal() {
+    const modal = document.getElementById("issueTableModal");
+    if (!modal) return;
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+}
+
+document.addEventListener("click", function (e) {
+    const modal = document.getElementById("issueTableModal");
+    if (modal && e.target === modal) closeIssueTableModal();
+});
+
+document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") closeIssueTableModal();
+});
+</script>

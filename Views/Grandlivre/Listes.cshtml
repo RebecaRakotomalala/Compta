@@ -330,6 +330,7 @@
                                     <span class="arrow-down">▼</span>
                                 </span>
                             </th>
+                            <th width="90">Date facture</th>
                             <th width="90" class="text-right">Débit</th>
                             <th width="90" class="text-right">Crédit</th>
                             <th width="90" class="text-center sortable" data-sort="lettrage">
@@ -396,6 +397,20 @@
                                         <span class="text-muted">-</span>
                                     }
                                 </td>
+
+                                <!-- Date facture -->
+                                <td class="text-center">
+                                    @if (e.DateFacture.HasValue)
+                                    {
+                                        <span class="echeance-date">
+                                            @e.DateFacture.Value.ToString("dd/MM/yy")
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
                                 
                                 <!-- Débit -->
                                 <td class="debit-cell text-right">
@@ -446,11 +461,14 @@
                     </tbody>
                     <tfoot>
                         <tr class="totals-row">
-                            <td colspan="6" class="text-left">
+                            <td colspan="7" class="text-left">
                                 <strong>Totaux page (@pagedEcritures.Count écritures)</strong>
                             </td>
                             <td class="text-center">
                                 <small>@pagedEcritures.Count(e => e.DateEcheance.HasValue) éch.</small>
+                            </td>
+                            <td class="text-center">
+                                <small>@pagedEcritures.Count(e => e.DateFacture.HasValue) fact.</small>
                             </td>
                             <td class="text-right debit-total">
                                 <strong>@pagedEcritures.Sum(e => e.Debit).ToString("N2")</strong>
@@ -465,11 +483,14 @@
                         @if (Model != null && Model.Any())
                         {
                             <tr class="grand-totals-row">
-                                <td colspan="6" class="text-left">
+                                <td colspan="7" class="text-left">
                                     <strong>Totaux généraux (@Model.Count écritures)</strong>
                                 </td>
                                 <td class="text-center">
                                     <small>@Model.Count(e => e.DateEcheance.HasValue) éch.</small>
+                                </td>
+                                <td class="text-center">
+                                    <small>@Model.Count(e => e.DateFacture.HasValue) fact.</small>
                                 </td>
                                 <td class="text-right debit-total">
                                     <strong>@Model.Sum(e => e.Debit).ToString("N2")</strong>

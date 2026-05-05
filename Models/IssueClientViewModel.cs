@@ -7,6 +7,7 @@ namespace dadaApp.Models
         public int EcritureId { get; set; }
         public DateTime DateComptable { get; set; }
         public DateTime? DateEcheance { get; set; }
+        public DateTime? DateFacture { get; set; }
         public string? NumeroPiece { get; set; }
         public string? NumeroFacture { get; set; }
         public string? Libelle { get; set; }
