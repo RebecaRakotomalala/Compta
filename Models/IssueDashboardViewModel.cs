@@ -1,6 +1,6 @@
 namespace dadaApp.Models
 {
-    /// <summary>Vue d’ensemble Issue : 5 colonnes semaine (S-2 à S+2).</summary>
+    /// <summary>Vue d’ensemble des échéances (échues par semaine) : 5 colonnes (S-2 à S+2).</summary>
     public class IssueDashboardViewModel
     {
         public List<IssueWeekColumnViewModel> Semaines { get; set; } = new();

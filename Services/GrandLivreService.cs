@@ -570,8 +570,8 @@ namespace dadaApp.Services
         }
 
         /// <summary>
-        /// Issue par colonnes : "S-2 et avant", S-1, semaine courante, S+1, S+2
-        /// (selon la date d’échéance).
+        /// Répartition par colonnes semaine (échues / à venir) : « S-2 et avant », S-1, semaine courante, S+1, S+2
+        /// (date de référence : échéance, ou date facture pour un crédit sans débit).
         /// </summary>
         public async Task<IssueDashboardViewModel> GetIssueDashboardParSemainesAsync(string? clientFilter = null)
         {

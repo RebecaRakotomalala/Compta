@@ -1,7 +1,7 @@
 @model dadaApp.Models.IssueDashboardViewModel
 @using System.Text.Json
 @{
-    ViewData["Title"] = "Tableau Issue";
+    ViewData["Title"] = "Tableau échues";
     Layout = null;
 
     var clientNames = ViewBag.AllClientNames as List<string> ?? new List<string>();
@@ -86,8 +86,8 @@
         <div class="issue-title-block">
             <div class="issue-icon"><i class="bi bi-table"></i></div>
             <div>
-                <h1 class="issue-title">Tableau Issue par client</h1>
-                <p class="issue-subtitle">1 ligne/client. Issue = S-2 et avant + S-1 + S0. Non issue = S+1 + S+2.</p>
+                <h1 class="issue-title">Tableau échues par client</h1>
+                <p class="issue-subtitle">1 ligne/client. Échues = S-2 et avant + S-1 + S0. Non échues = S+1 + S+2.</p>
             </div>
         </div>
     </div>
@@ -107,8 +107,8 @@
         <div class="issue-grand-total" style="margin-bottom:12px;">
             <span><i class="bi bi-table"></i> @filteredRows.Count client(s)</span>
             <span class="issue-grand-total-nums">
-                Issue <strong>@issueGrandTotal.ToString("N2")</strong>
-                · Non issue <strong>@nonIssueGrandTotal.ToString("N2")</strong>
+                Échues <strong>@issueGrandTotal.ToString("N2")</strong>
+                · Non échues <strong>@nonIssueGrandTotal.ToString("N2")</strong>
                 · Global <strong>@fullGrandTotal.ToString("N2")</strong>
             </span>
         </div>
@@ -117,8 +117,8 @@
                 <thead>
                     <tr>
                         <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">Client</th>
-                        <th style="text-align:right; padding:10px; border-bottom:1px solid #e5e7eb;">Total Issue</th>
-                        <th style="text-align:right; padding:10px; border-bottom:1px solid #e5e7eb;">Total Non Issue</th>
+                        <th style="text-align:right; padding:10px; border-bottom:1px solid #e5e7eb;">Total échues</th>
+                        <th style="text-align:right; padding:10px; border-bottom:1px solid #e5e7eb;">Total non échues</th>
                         <th style="text-align:right; padding:10px; border-bottom:1px solid #e5e7eb;">Total Ligne</th>
                     </tr>
                 </thead>
@@ -138,7 +138,7 @@
                             <td style="padding:10px; border-bottom:1px solid #f1f5f9;">
                                 <button type="button"
                                         class="issue-btn issue-btn-secondary"
-                                        data-title="@($"Issue - {row.NomClient}")"
+                                        data-title="@($"Échues - {row.NomClient}")"
                                         data-items='@issueJson'
                                         onclick="openIssueTableDetail(this)">
                                     @row.NomClient
@@ -147,7 +147,7 @@
                             <td style="padding:10px; text-align:right; border-bottom:1px solid #f1f5f9;">
                                 <button type="button"
                                         class="issue-btn issue-btn-primary"
-                                        data-title="@($"Issue - {row.NomClient}")"
+                                        data-title="@($"Échues - {row.NomClient}")"
                                         data-items='@issueJson'
                                         onclick="openIssueTableDetail(this)">
                                     @row.IssueTotal.ToString("N2")
@@ -156,7 +156,7 @@
                             <td style="padding:10px; text-align:right; border-bottom:1px solid #f1f5f9;">
                                 <button type="button"
                                         class="issue-btn issue-btn-secondary"
-                                        data-title="@($"Non issue - {row.NomClient}")"
+                                        data-title="@($"Non échues - {row.NomClient}")"
                                         data-items='@nonIssueJson'
                                         onclick="openIssueTableDetail(this)">
                                     @row.NonIssueTotal.ToString("N2")

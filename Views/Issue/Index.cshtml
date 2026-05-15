@@ -1,7 +1,7 @@
 @model dadaApp.Models.IssueDashboardViewModel
 
 @{
-    ViewData["Title"] = "Issue";
+    ViewData["Title"] = "Échues";
     Layout = null;
 
     var clientNames = ViewBag.AllClientNames as List<string> ?? new List<string>();
@@ -24,7 +24,7 @@
                 <i class="bi bi-calendar-week"></i>
             </div>
             <div>
-                <h1 class="issue-title">Issue par semaine</h1>
+                <h1 class="issue-title">Échues par semaine</h1>
                 <p class="issue-subtitle">
                     Écritures <strong>non lettrées</strong>, réparties selon la <strong>date d’échéance</strong>.
                     Cinq fenêtres : il y a 2 semaines et avant, semaine dernière, cette semaine, semaine prochaine, dans 2 semaines (lun–dim).

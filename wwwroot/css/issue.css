@@ -177,7 +177,7 @@ body {
     border-color: var(--gray-400);
 }
 
-/* Custom select (reprend le style Grand Livre, adapté Issue) */
+/* Custom select (reprend le style Grand Livre, adapté vues échues) */
 .custom-select-wrapper {
     position: relative;
     width: 100%;
